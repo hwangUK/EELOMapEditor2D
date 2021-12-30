@@ -12,7 +12,6 @@ public enum ELocationTypeData
     grandCanyon,
     city,
     frozen,
-    dummy,
     max
 }
 [CustomEditor(typeof(ELocationTypeData))]
@@ -22,7 +21,7 @@ public class FCellCash
     private Vector3Int          _gridPos;
 
     private ELocationTypeData   _location           = ELocationTypeData.max;        //지역 파일로 빌드
-    private int                 _instanceGUIDMemo   = -1;                           //인스턴스 파일로 빌드
+    private int[]               _instanceGUIDMemo   =  new int[3] { -1,-1,-1 };                  //인스턴스 파일로 빌드
     private bool                _isCollisionMemo    = false;                        //충돌체 파일로 빌드
     private int                 _triggerIdxMemo     = -1;                           //이벤트 파일로 빌드
     private bool                _isHill             = false;                        //충돌체 파일로 빌드
@@ -48,13 +47,13 @@ public class FCellCash
         return _location;
     }
 
-    public void SetInstanceGUIDMemo(int ID)
+    public void SetInstanceGUIDMemo(int floor,int ID)
     {
-        _instanceGUIDMemo = ID;
+        _instanceGUIDMemo[floor] = ID;
     }
-    public int GetInstanceGUIDMemo()
+    public int GetInstanceGUIDMemo(int floor)
     {
-        return _instanceGUIDMemo;
+        return _instanceGUIDMemo[floor];
     }
     public void SetIsCollision(bool input)
     {
@@ -108,13 +107,13 @@ public class OCell
         return FCell.GetLocationMemo();
     }
 
-    public void SetInstanceGUID(int id)
+    public void SetInstanceGUID(int floor,int id)
     {
-        FCell.SetInstanceGUIDMemo(id);
+        FCell.SetInstanceGUIDMemo(floor,id);
     }
-    public int GetInstanceGUID()
+    public int GetInstanceGUID(int floor)
     {
-        return FCell.GetInstanceGUIDMemo();
+        return FCell.GetInstanceGUIDMemo(floor);
     }
     public void SetIsCollision(bool input)
     {
@@ -133,7 +132,7 @@ public class OCell
         return FCell.GetIsCollision();
     }
 
-    public void SetEventTriggerIdx(int input)
+    public void SetEventEventIdx(int input)
     {
         FCell.SetEventIdx(input);
     }

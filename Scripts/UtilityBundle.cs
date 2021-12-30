@@ -8,7 +8,7 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-namespace UKHMapUtility
+namespace UKH
 {
     [Serializable]
     public class SerializableGridData
@@ -20,15 +20,16 @@ namespace UKHMapUtility
     public class SerializableETilePresetData
     {
         public int                  _guidTOBJ;
-        public ELocationTypeData    _locationType;
         public string               _filename;
-        public bool                 _isBaseLocPlane;
+        public bool                 _isLocation;
+        public ELocationTypeData    _locationType;
+        public bool                 _isGathering;
+        public int                  _gatheringIdx;
         public bool                 _isUseAnim;
         public string               _textureName;
         public List<string>         _animTextureNameList;
         public string               _tileName;
-        public bool                 _isEntityEvent;
-        public int                  _entityEventIdx;
+        public SpriteAlignment      _pivotType;
 
         public SerializableETilePresetData()
         {
@@ -38,7 +39,7 @@ namespace UKHMapUtility
 
     public static class FileSystem 
     {
-        public static void CSVWrite(List<List<OCell>> mapData, string path, ETileLayerType layerType)
+        public static void CSVWrite(List<List<OCell>> mapData, string path, ETileLayerSaveType layerType)
         {
             SerializableGridData MDB = new SerializableGridData();
             int sizeX = mapData.Count;
@@ -49,16 +50,31 @@ namespace UKHMapUtility
                 string[] row = new string[sizeY];
                 for (int j = 0; j < sizeY; j++)
                 {
-                    if (layerType == ETileLayerType.Instance)
-                        row[j] = mapData[i][j].GetInstanceGUID().ToString();
-                    else if (layerType == ETileLayerType.Location)
+                    if (layerType == ETileLayerSaveType.Floor)
+                    {
+                        row[j] = mapData[i][j].GetInstanceGUID(0).ToString();
+                        row[j] += "#";
+                        row[j] += mapData[i][j].GetInstanceGUID(1).ToString();
+                        row[j] += "#";
+                        row[j] += mapData[i][j].GetInstanceGUID(2).ToString();
+
+                    }
+                    else if (layerType == ETileLayerSaveType.Location)
+                    {
                         row[j] = mapData[i][j].GetLocationType().ToString();
-                    else if (layerType == ETileLayerType.Collision)
+                    }
+                    else if (layerType == ETileLayerSaveType.Collision)
+                    {
                         row[j] = mapData[i][j].GetIsCollision() ? "T" : "F";
-                    else if (layerType == ETileLayerType.Trigger)
+                    }
+                    else if (layerType == ETileLayerSaveType.Event)
+                    {
                         row[j] = mapData[i][j].GetEventTriggerIDX().ToString();
-                    else if (layerType == ETileLayerType.Hill)
+                    }
+                    else if (layerType == ETileLayerSaveType.Hill)
+                    {
                         row[j] = mapData[i][j].GetIsHill() ? "T" : "F"; ;
+                    }
                 }
                 MDB.gridData.Add(row);
             }
@@ -86,7 +102,14 @@ namespace UKHMapUtility
         {
 
         }
-        public static void BinaryWrite(List<List<OCell>> mapData, string path, ETileLayerType layerType)
+        public static bool FileExistChecker(string path)
+        {
+            if (File.Exists(path))
+               return true;
+            else
+                return false;
+        }
+        public static bool BinaryWrite(List<List<OCell>> mapData, string path, ETileLayerSaveType layerType)
         {
             SerializableGridData MDB = new SerializableGridData();
             int sizeX = mapData.Count;
@@ -96,17 +119,32 @@ namespace UKHMapUtility
                 string[] row = new string[sizeY];
                 for (int j = 0; j < sizeY; j++)
                 {
-                    if (layerType == ETileLayerType.Instance)
-                        row[j] = mapData[i][j].GetInstanceGUID().ToString();
-                    else if (layerType == ETileLayerType.Location)
-                        row[j] = mapData[i][j].GetLocationType().ToString();
-                    else if (layerType == ETileLayerType.Collision)
-                        row[j] = mapData[i][j].GetIsCollision() ? "T" : "F";
-                    else if (layerType == ETileLayerType.Trigger)
-                        row[j] = mapData[i][j].GetEventTriggerIDX().ToString();
-                    else if (layerType == ETileLayerType.Hill)
-                        row[j] = mapData[i][j].GetIsHill() ? "T" : "F"; ;
 
+                    if (layerType == ETileLayerSaveType.Floor)
+                    {
+                        row[j] = mapData[i][j].GetInstanceGUID(0).ToString(); 
+                        row[j] += "#";
+                        row[j] += mapData[i][j].GetInstanceGUID(1).ToString();
+                        row[j] += "#";
+                        row[j] += mapData[i][j].GetInstanceGUID(2).ToString();
+
+                    }
+                    else if (layerType == ETileLayerSaveType.Location)
+                    {
+                        row[j] = mapData[i][j].GetLocationType().ToString();
+                    }
+                    else if (layerType == ETileLayerSaveType.Collision)
+                    {
+                        row[j] = mapData[i][j].GetIsCollision() ? "T" : "F";
+                    }
+                    else if (layerType == ETileLayerSaveType.Event)
+                    {
+                        row[j] = mapData[i][j].GetEventTriggerIDX().ToString();
+                    }
+                    else if (layerType == ETileLayerSaveType.Hill)
+                    {
+                        row[j] = mapData[i][j].GetIsHill() ? "T" : "F"; ;
+                    }
                 }
                 MDB.gridData.Add(row);
             }
@@ -119,6 +157,8 @@ namespace UKHMapUtility
             FileStream file = File.Create(path);
             bf.Serialize(file, MDB);
             file.Close();
+
+            return file != null;
         }
 
         public static SerializableGridData BinaryRead(string path)
@@ -169,7 +209,137 @@ namespace UKHMapUtility
             writer.Close();
         }
     }
+    public static class JsonETileEncryptIO
+    {
+        private static readonly string privateKey = "1718hy9dsf0jsdlfjds0pa9ids78ahgf81h32re";
+        private static string path_presetJson = $"{Application.streamingAssetsPath}/Bin/PRESET/";
 
+        //암호화
+        private static string Encrypt(string data)
+        {
+            byte[] bytes = System.Text.Encoding.UTF8.GetBytes(data);
+            RijndaelManaged rm = CreateRijndael();
+            ICryptoTransform ct = rm.CreateEncryptor();
+            byte[] results = ct.TransformFinalBlock(bytes, 0, bytes.Length);
+            return System.Convert.ToBase64String(results, 0, results.Length);
+
+        }
+        //복호화
+        private static string Decrypt(string data)
+        {
+            byte[] bytes = System.Convert.FromBase64String(data);
+            RijndaelManaged rm = CreateRijndael();
+            ICryptoTransform ct = rm.CreateDecryptor();
+            byte[] resultArray = ct.TransformFinalBlock(bytes, 0, bytes.Length);
+            return System.Text.Encoding.UTF8.GetString(resultArray);
+        }
+
+        private static RijndaelManaged CreateRijndael()
+        {
+            byte[] PK = System.Text.Encoding.UTF8.GetBytes(privateKey);
+            RijndaelManaged result = new RijndaelManaged();
+
+            byte[] newKeys = new byte[16];
+            Array.Copy(PK, 0, newKeys, 0, 16);
+
+            result.Key = newKeys;
+            result.Mode = CipherMode.ECB;
+            result.Padding = PaddingMode.PKCS7;
+            return result;
+        }
+
+        public static bool SavePresetToJson(DBPresetTileSO data, string filename, bool isLocation)
+        {
+            //원래라면 플레이어 정보나 인벤토리 등에서 긁어모아야 할 정보들.
+            SerializableETilePresetData newData = new SerializableETilePresetData();
+            
+            newData._guidTOBJ       = data._guidTOBJ;
+            newData._locationType   = data._locationType;
+            newData._filename       = data._filename;
+            newData._isLocation     = data._isLocation;
+            newData._isUseAnim      = data._isUseAnim;
+            newData._textureName    = data._texture.name;
+            if (data._animTextureList != null)
+            {
+                if (newData._animTextureNameList == null)
+                    newData._animTextureNameList = new List<string>();
+            }
+            for (int i = 0; i < data._animTextureList.Count; i++)
+                newData._animTextureNameList.Add(data._animTextureList[i].name);
+
+            newData._tileName       = data._tile.name;
+            newData._isGathering    = data._isGatherEvent;
+            newData._gatheringIdx   = data._gatherEventIdx;
+            newData._pivotType      = data._pivotAlignment;
+
+            string jsonString = JsonUtility.ToJson(newData);
+            string encryptString = Encrypt(jsonString);
+
+            string path = $"{path_presetJson}{filename}.pre";
+            FileStream fs;
+            using (fs = new FileStream(path, FileMode.Create, FileAccess.Write))
+            {
+                byte[] bytes = System.Text.Encoding.UTF8.GetBytes(encryptString);
+                fs.Write(bytes, 0, bytes.Length);
+            }
+            return fs != null;
+        }
+
+        public static List<DBPresetTileSO> Load(bool isLocation)
+        {
+            List<string> filenameList = new List<string>();
+            List<DBPresetTileSO> returnData = new List<DBPresetTileSO>();
+
+            DirectoryInfo di = new DirectoryInfo(path_presetJson);
+            foreach (FileInfo file in di.GetFiles())
+            {
+                if (file.Extension.ToLower().CompareTo(".pre") == 0)
+                {
+                    String FileNameOnly = file.Name.Substring(0, file.Name.Length - 4);
+                    String FullFilePath = file.FullName;
+                    filenameList.Add(FullFilePath);
+                    Debug.Log(FullFilePath + " " + FileNameOnly);
+
+                    string encryptData = "";
+                    using (FileStream fs = new FileStream(FullFilePath, FileMode.Open, FileAccess.Read))
+                    {
+                        byte[] bytes = new byte[(int)fs.Length];
+
+                        fs.Read(bytes, 0, (int)fs.Length);
+
+                        encryptData = System.Text.Encoding.UTF8.GetString(bytes);
+                    }
+
+                    string decryptData = Decrypt(encryptData);
+
+                    Debug.Log(decryptData);
+
+                    SerializableETilePresetData data = JsonUtility.FromJson<SerializableETilePresetData>(decryptData);
+
+                    DBPresetTileSO returnOBJ = new DBPresetTileSO();
+                    returnOBJ._guidTOBJ = data._guidTOBJ;
+                    returnOBJ._locationType = data._locationType;
+                    returnOBJ._filename = data._filename;
+                    returnOBJ._isLocation = data._isLocation;
+                    returnOBJ._isUseAnim = data._isUseAnim;
+                    returnOBJ._texture = Resources.Load<Texture2D>("Bin/Sprites/" + data._textureName);
+
+                    if (data._animTextureNameList != null)
+                        returnOBJ._animTextureList = new List<Texture2D>();
+
+                    for (int i = 0; i < returnOBJ._animTextureList.Count; i++)
+                        returnOBJ._animTextureList.Add(Resources.Load<Texture2D>("Bin/Sprite/" + data._animTextureNameList[i]));
+
+                    returnOBJ._tile = Resources.Load<Tile>("Bin/Tile/" + data._tileName);
+                    returnOBJ._isGatherEvent = data._isGathering;
+                    returnOBJ._gatherEventIdx = data._gatheringIdx;
+
+                    returnData.Add(returnOBJ);
+                }
+            }
+            return returnData;
+        }
+    }
     public static class GenerateGameObject
     {
         public static GameObject GenerateTilemapFrame(Transform root)
@@ -184,48 +354,14 @@ namespace UKHMapUtility
             gob.GetComponent<TilemapRenderer>().sortOrder = TilemapRenderer.SortOrder.BottomLeft;
             gob.GetComponent<TilemapRenderer>().mode = TilemapRenderer.Mode.Chunk;
             gob.GetComponent<TilemapRenderer>().detectChunkCullingBounds = TilemapRenderer.DetectChunkCullingBounds.Auto;
-            gob.GetComponent<TilemapRenderer>().sortingOrder = -1;
+            gob.GetComponent<TilemapRenderer>().sortingOrder = -5;
             gob.transform.SetParent(root.transform);
             return gob;
         }
 
-        public static GameObject GenerateTilemapLocationBase(Transform root)
+        public static GameObject GenerateTilemapFloor(int floor, Transform root)
         {
             GameObject gob = new GameObject();
-            gob.name = "TilemapBaseLocation";
-            gob.transform.position = Vector3.zero;
-            gob.AddComponent<Tilemap>();
-            gob.GetComponent<Tilemap>().tileAnchor = new Vector3(0.5f, 0.5f, 0f);
-            gob.GetComponent<Tilemap>().orientation = Tilemap.Orientation.XY;
-            gob.AddComponent<TilemapRenderer>();
-            gob.GetComponent<TilemapRenderer>().sortOrder = TilemapRenderer.SortOrder.BottomLeft;
-            gob.GetComponent<TilemapRenderer>().mode = TilemapRenderer.Mode.Chunk;
-            gob.GetComponent<TilemapRenderer>().detectChunkCullingBounds = TilemapRenderer.DetectChunkCullingBounds.Auto;
-            gob.GetComponent<TilemapRenderer>().sortingOrder = 1;
-            gob.transform.SetParent(root.transform);
-            return gob;
-        }
-        public static GameObject GenerateTilemapInstance(Transform root)
-        {
-            GameObject gob = new GameObject();
-            gob.name = "TilemapInstance";
-            gob.transform.position = Vector3.zero;
-            gob.AddComponent<Tilemap>();
-            gob.AddComponent<EXSceneViewEvent>();
-            gob.GetComponent<Tilemap>().tileAnchor = new Vector3(0.5f, 0.5f, 0f);
-            gob.GetComponent<Tilemap>().orientation = Tilemap.Orientation.XY;
-            gob.AddComponent<TilemapRenderer>();
-            gob.GetComponent<TilemapRenderer>().sortOrder = TilemapRenderer.SortOrder.BottomLeft;
-            gob.GetComponent<TilemapRenderer>().mode = TilemapRenderer.Mode.Individual;
-            gob.GetComponent<TilemapRenderer>().detectChunkCullingBounds = TilemapRenderer.DetectChunkCullingBounds.Auto;
-            gob.GetComponent<TilemapRenderer>().sortingOrder = 2;
-            gob.transform.SetParent(root.transform);
-            return gob;
-        }
-        public static GameObject GenerateTilemapInstanceB1(Transform root)
-        {
-            GameObject gob = new GameObject();
-            gob.name = "TilemapInstanceB1";
             gob.transform.position = Vector3.zero;
             gob.AddComponent<Tilemap>();
             gob.GetComponent<Tilemap>().tileAnchor = new Vector3(0.5f, 0.5f, 0f);
@@ -234,7 +370,23 @@ namespace UKHMapUtility
             gob.GetComponent<TilemapRenderer>().sortOrder = TilemapRenderer.SortOrder.BottomLeft;
             gob.GetComponent<TilemapRenderer>().mode = TilemapRenderer.Mode.Individual;
             gob.GetComponent<TilemapRenderer>().detectChunkCullingBounds = TilemapRenderer.DetectChunkCullingBounds.Auto;
-            gob.GetComponent<TilemapRenderer>().sortingOrder = 0;
+            if (floor == 0)
+            {
+                gob.name = "TilemapFloorB1";
+                gob.GetComponent<TilemapRenderer>().sortingOrder = -1;
+            }
+            else if(floor == 1)
+            {
+                gob.name = "TilemapFloor0";
+                gob.AddComponent<EXSceneViewEvent>();
+                gob.GetComponent<TilemapRenderer>().sortingOrder = 0;
+            }
+            else if(floor == 2)
+            {
+                gob.name = "TilemapFloor1";
+                gob.GetComponent<TilemapRenderer>().sortingOrder = 1;
+            }
+         
             gob.transform.SetParent(root.transform);
             return gob;
         }
@@ -261,10 +413,10 @@ namespace UKHMapUtility
             gob.transform.SetParent(root.transform);
             return gob;
         }
-        public static GameObject GenerateTilemapTrigger(Transform root)
+        public static GameObject GenerateTilemapEvent(Transform root)
         {
             GameObject gob = new GameObject();
-            gob.name = "TilemapTrigger";
+            gob.name = "TilemapEvent";
             gob.transform.position = Vector3.zero;
             gob.AddComponent<Tilemap>();
             gob.GetComponent<Tilemap>().tileAnchor = new Vector3(0.5f, 0.5f, 0f);
@@ -364,137 +516,5 @@ namespace UKHMapUtility
         }
     }
 
-    public static class JsonETileEncryptIO
-    {
-        private static readonly string privateKey = "1718hy9dsf0jsdlfjds0pa9ids78ahgf81h32re";
-        private static string path_etpInst = $"{Application.streamingAssetsPath}/Bin/ETPI/";
-        private static string path_etpLoc  = $"{Application.streamingAssetsPath}/Bin/ETPL/";
-
-        //암호화
-        private static string Encrypt(string data)
-        {
-            byte[] bytes = System.Text.Encoding.UTF8.GetBytes(data);
-            RijndaelManaged rm = CreateRijndael();
-            ICryptoTransform ct = rm.CreateEncryptor();
-            byte[] results = ct.TransformFinalBlock(bytes, 0, bytes.Length);
-            return System.Convert.ToBase64String(results, 0, results.Length);
-
-        }
-        //복호화
-        private static string Decrypt(string data)
-        {
-            byte[] bytes = System.Convert.FromBase64String(data);
-            RijndaelManaged rm = CreateRijndael();
-            ICryptoTransform ct = rm.CreateDecryptor();
-            byte[] resultArray = ct.TransformFinalBlock(bytes, 0, bytes.Length);
-            return System.Text.Encoding.UTF8.GetString(resultArray);
-        }
-
-        private static RijndaelManaged CreateRijndael()
-        {
-            byte[] PK = System.Text.Encoding.UTF8.GetBytes(privateKey);
-            RijndaelManaged result = new RijndaelManaged();
-
-            byte[] newKeys = new byte[16];
-            Array.Copy(PK, 0, newKeys, 0, 16);
-
-            result.Key = newKeys;
-            result.Mode = CipherMode.ECB;
-            result.Padding = PaddingMode.PKCS7;
-            return result;
-        }
-
-        public static void SavePresetToJson(DBPresetTileOBJ data, string filename, bool isLocation)
-        {
-            //원래라면 플레이어 정보나 인벤토리 등에서 긁어모아야 할 정보들.
-            SerializableETilePresetData stpd = new SerializableETilePresetData();
-
-            stpd. _guidTOBJ             = data._guidTOBJ;
-            stpd._locationType          = data._locationType;
-            stpd._filename              = data._filename;
-            stpd._isBaseLocPlane        = data._isBaseLocPlane;
-            stpd._isUseAnim             = data._isUseAnim;
-            stpd._textureName           = data._texture.name;
-
-            if(data._animTextureList != null)
-            {
-                if(stpd._animTextureNameList == null)
-                    stpd._animTextureNameList = new List<string>();
-            }
-            for(int i =0; i < data._animTextureList.Count; i++)
-                stpd._animTextureNameList.Add(data._animTextureList[i].name);
-
-            stpd._tileName              = data._tile.name;
-            stpd._isEntityEvent         = data._isEntityEvent;
-            stpd._entityEventIdx        = data._entityEventIdx;
-
-            string jsonString           = JsonUtility.ToJson(stpd);
-            string encryptString        = Encrypt(jsonString);
-
-            string path = isLocation ? path_etpLoc : path_etpInst;
-            path += $"{filename}.etp";
-            using (FileStream fs = new FileStream(path, FileMode.Create, FileAccess.Write))
-            {
-                byte[] bytes = System.Text.Encoding.UTF8.GetBytes(encryptString);
-                fs.Write(bytes, 0, bytes.Length);
-            }
-        }
-
-        public static List<DBPresetTileOBJ> Load(bool isLocation)
-        {
-            string path = isLocation ? path_etpLoc : path_etpInst;
-
-            List<string> filenameList           = new List<string>();
-            List<DBPresetTileOBJ> returnData    = new List<DBPresetTileOBJ>();
-
-            DirectoryInfo di = new DirectoryInfo(path);
-            foreach (FileInfo file in di.GetFiles())
-            {
-                if (file.Extension.ToLower().CompareTo(".etp") == 0)
-                {
-                    String FileNameOnly = file.Name.Substring(0, file.Name.Length - 4);
-                    String FullFilePath = file.FullName;
-                    filenameList.Add(FullFilePath);
-                    Debug.Log(FullFilePath + " " + FileNameOnly);
-
-                    string encryptData = "";
-                    using (FileStream fs = new FileStream(FullFilePath, FileMode.Open, FileAccess.Read))
-                    {
-                        byte[] bytes = new byte[(int)fs.Length];
-
-                        fs.Read(bytes, 0, (int)fs.Length);
-
-                        encryptData = System.Text.Encoding.UTF8.GetString(bytes);
-                    }
-
-                    string decryptData = Decrypt(encryptData);
-
-                    Debug.Log(decryptData);
-
-                    SerializableETilePresetData data = JsonUtility.FromJson<SerializableETilePresetData>(decryptData); 
-
-                    DBPresetTileOBJ returnOBJ = new DBPresetTileOBJ();
-                    returnOBJ._guidTOBJ = data._guidTOBJ;
-                    returnOBJ._locationType = data._locationType;
-                    returnOBJ._filename = data._filename;
-                    returnOBJ._isBaseLocPlane = data._isBaseLocPlane;
-                    returnOBJ._isUseAnim = data._isUseAnim;
-                    returnOBJ._texture = Resources.Load<Texture2D>("Bin/Sprites/" + data._textureName);
-
-                    if (data._animTextureNameList != null)
-                        returnOBJ._animTextureList = new List<Texture2D>();
-
-                    for (int i = 0; i < returnOBJ._animTextureList.Count; i++)
-                        returnOBJ._animTextureList.Add(Resources.Load<Texture2D>("Bin/Sprite/" + data._animTextureNameList[i]));
-
-                    returnOBJ._tile = Resources.Load<Tile>("Bin/Tile/" + data._tileName);
-                    returnOBJ._isEntityEvent = data._isEntityEvent;
-                    returnOBJ._entityEventIdx = data._entityEventIdx;
-
-                    returnData.Add(returnOBJ);
-                }
-            }
-            return returnData;
-        }
-    }
+  
 }

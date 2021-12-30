@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.Tilemaps;
 using UnityEditor;
 using UnityEngine.UIElements;
-using UKHMapUtility;
+using UKH;
 using System.IO;
 
 #if UNITY_EDITOR
@@ -14,13 +14,9 @@ public class MapEditorWnd : EditorWindow
     bool        isInit = false;
     string      _text_worldSizeX;
     string      _text_worldSizeY;
-    bool        _chk_create;
-
     string      _text_baseFilePath;
     string      _text_loadMapFilename;
-    bool        _chk_load_filename;
     string      _text_saveMapFilename;
-    bool        _chk_save_filename;
 
     [MenuItem("215 Tool (Project U)/ [Editor] MapEditor")]
     public static void OnOpenWindow()
@@ -29,13 +25,8 @@ public class MapEditorWnd : EditorWindow
             new Vector2(350,500);
         CreateSceneInstance();
         EELOMapEditorCore.GetInst().mapDatafilePath = $"{ Application.dataPath }/Resources/Bin/MapData";
-        EELOMapEditorCore.GetInst().LoadAllTODFromAssetDatabase();
+        EELOMapEditorCore.GetInst().LoadAllPresetFromAssetDatabase();
     }
-    //[MenuItem("215 Tool (Project U)/ loadETP")]
-    //public static void OnOpenWindowETP()
-    //{
-    //    EELOMapEditorCore.GetInst().LoadETPreset();
-    //}
     private void OnGUI()
     {
         if (!isInit)
@@ -53,144 +44,193 @@ public class MapEditorWnd : EditorWindow
 
         if (GUILayout.Button("초기화", st_btn_mid))
         {
-            DestroyImmediate(GameObject.Find("EELOWorldMap").gameObject);
-            this.Close();
-            return;
+            bool res = EditorUtility.DisplayDialog("위험", "정말 초기화하시겠습니까?\n저장하지 않은 맵정보는 날라갑니당", "넵","아니요");
+            if(res)
+            {
+                DestroyImmediate(GameObject.Find("EELOWorldMap").gameObject);
+                this.Close();
+                return;
+            }
         }
 
         #region GenerateMap
         GUI.color = GUIStyleDefine.GetColorGBlue();
 
         GUILayout.Space(10);
-        GUILayout.Label("맵 생성", style_Lable); 
+        GUILayout.Label("월드맵", style_Lable); 
         GUILayout.Space(2);
 
         _text_worldSizeX = EditorGUILayout.TextField("맵 크기(가로)", _text_worldSizeX);
         _text_worldSizeY = EditorGUILayout.TextField("맵 크기(세로)", _text_worldSizeY);
-        _chk_create = GUILayout.Toggle(_chk_create, "확인");         
-        GUI.enabled = _chk_create;
-        if (GUILayout.Button("생성", st_btn_mid))
+        //_chk_create = GUILayout.Toggle(_chk_create, "확인");         
+        GUI.enabled = _text_worldSizeX != "" && _text_worldSizeY != "";// _chk_create;
+        
+        if (GUILayout.Button("월드맵 만들기", st_btn_mid))
         {
-            int world_width     = _text_worldSizeX == "" ? 0 : Int16.Parse(_text_worldSizeX);
-            int world_height    = _text_worldSizeY == "" ? 0 : Int16.Parse(_text_worldSizeY);
-            if(world_width > 0  && world_height > 0)
+            bool res = EditorUtility.DisplayDialog("알림", "새로운 맵을 만드시겠습니까?\n저장하지 않은 맵정보는 날라갑니당", "넵", "아니요");
+            if (res)
             {
-                EELOMapEditorCore.GetInst().GenerateWorldMap(world_width, world_height);
+                int world_width = _text_worldSizeX == "" ? 0 : Int16.Parse(_text_worldSizeX);
+                int world_height = _text_worldSizeY == "" ? 0 : Int16.Parse(_text_worldSizeY);
+                if (world_width > 0 && world_height > 0)
+                {
+                    EELOMapEditorCore.GetInst().GenerateWorldMap(world_width, world_height);
+                }
+                var sceneView = SceneView.lastActiveSceneView;
+                sceneView.pivot = Vector3.zero;
             }
-            var sceneView   = SceneView.lastActiveSceneView;
-            sceneView.pivot = Vector3.zero;
-            _chk_create = false;
         }
         GUI.enabled = true;
         #endregion
 
-        #region RemoveMap
+        #region RemoveMap  
         GUILayout.Space(10);
-        GUILayout.Label("맵 삭제", style_Lable);
-        GUILayout.Space(2);
-
         GUILayout.BeginHorizontal();
-        if (GUILayout.Button("  개체  ", st_btn_mid))
-        {
-            EELOMapEditorCore.GetInst().DeleteTilemapInstance();
-            EELOMapEditorCore.GetInst().CreateTilemapInstance();
-        }
-        if (GUILayout.Button("지역정보", st_btn_mid))
-        {
-            EELOMapEditorCore.GetInst().DeleteTilemapLocation();
-            EELOMapEditorCore.GetInst().CreateTilemapLocation();
-        }
-        if (GUILayout.Button("충돌체", st_btn_mid))
-        {
-            EELOMapEditorCore.GetInst().DeleteTilemapCollision();
-            EELOMapEditorCore.GetInst().CreateTilemapCollision();
-        }
-        //if (GUILayout.Button("이벤트", st_btn_mid))
+        //if (GUILayout.Button("  개체  ", st_btn_mid))
         //{
-        //    EELOMapEditorCore.GetInst().DeleteTilemapTrigger();
-        //    EELOMapEditorCore.GetInst().CreateTilemapTrigger();
+        //    EELOMapEditorCore.GetInst().DeleteTilemapInstance();
+        //    EELOMapEditorCore.GetInst().CreateTilemapInstance();
         //}
-        if (GUILayout.Button("언덕", st_btn_mid))
+        //if (GUILayout.Button("지역정보", st_btn_mid))
+        //{
+        //    EELOMapEditorCore.GetInst().DeleteTilemapLocation();
+        //    EELOMapEditorCore.GetInst().CreateTilemapLocation();
+        //}
+        //if (GUILayout.Button("충돌체", st_btn_mid))
+        //{
+        //    EELOMapEditorCore.GetInst().DeleteTilemapCollision();
+        //    EELOMapEditorCore.GetInst().CreateTilemapCollision();
+        //}
+        ////if (GUILayout.Button("이벤트", st_btn_mid))
+        ////{
+        ////    EELOMapEditorCore.GetInst().DeleteTilemapTrigger();
+        ////    EELOMapEditorCore.GetInst().CreateTilemapTrigger();
+        ////}
+        //if (GUILayout.Button("언덕", st_btn_mid))
+        //{
+        //    EELOMapEditorCore.GetInst().DeleteTilemapHill();
+        //    EELOMapEditorCore.GetInst().CreateTilemapHill();
+        //}
+        if (GUILayout.Button("월드맵 지우기", st_btn_mid))
         {
-            EELOMapEditorCore.GetInst().DeleteTilemapHill();
-            EELOMapEditorCore.GetInst().CreateTilemapHill();
-        }
-        if (GUILayout.Button(" 월드맵 ", st_btn_mid))
-        {
-            //기존에 GameObject가 있다면 지워라
-            EELOMapEditorCore.GetInst().DeleteTilemapFrame();
-            EELOMapEditorCore.GetInst().DeleteTilemapLocation();
-            EELOMapEditorCore.GetInst().DeleteTilemapInstance();
-            EELOMapEditorCore.GetInst().DeleteTilemapCollision();
-            EELOMapEditorCore.GetInst().DeleteTilemapTrigger();
-            EELOMapEditorCore.GetInst().DeleteTilemapHill();
-            EELOMapEditorCore.GetInst().worldMap = null;
+            bool res = EditorUtility.DisplayDialog("알림", "맵을 지웁니다?\n저장하지 않은 맵정보는 날라갑니당", "넵", "아니요");
+            if (res)
+            {
+                //기존에 GameObject가 있다면 지워라
+                EELOMapEditorCore.GetInst().DeleteTilemapFrame();
+                //EELOMapEditorCore.GetInst().DeleteTilemapLocation();
+                EELOMapEditorCore.GetInst().DeleteTilemapInstance(0);
+                EELOMapEditorCore.GetInst().DeleteTilemapInstance(1);
+                EELOMapEditorCore.GetInst().DeleteTilemapInstance(2);
+                EELOMapEditorCore.GetInst().DeleteTilemapCollision();
+                EELOMapEditorCore.GetInst().DeleteTilemapTrigger();
+                EELOMapEditorCore.GetInst().DeleteTilemapHill();
+                EELOMapEditorCore.GetInst().worldMap = null;
 
-            //다시 GameObject가 생성
-            EELOMapEditorCore.GetInst().CreateTilemapFrame();
-            EELOMapEditorCore.GetInst().CreateTilemapLocation();
-            EELOMapEditorCore.GetInst().CreateTilemapInstance();
-            EELOMapEditorCore.GetInst().CreateTilemapCollision();
-            EELOMapEditorCore.GetInst().CreateTilemapTrigger();
-            EELOMapEditorCore.GetInst().CreateTilemapHill();
+                //다시 GameObject가 생성
+                EELOMapEditorCore.GetInst().CreateTilemapFrame();
+                //EELOMapEditorCore.GetInst().CreateTilemapLocation();
+                EELOMapEditorCore.GetInst().CreateTilemapFloor(0);
+                EELOMapEditorCore.GetInst().CreateTilemapFloor(1);
+                EELOMapEditorCore.GetInst().CreateTilemapFloor(2);
+                EELOMapEditorCore.GetInst().CreateTilemapCollision();
+                EELOMapEditorCore.GetInst().CreateTilemapTrigger();
+                EELOMapEditorCore.GetInst().CreateTilemapHill();
 
-            //맵생성 대기
-            EELOMapEditorCore.GetInst().isGenerateWorld = false;
+                //맵생성 대기
+                EELOMapEditorCore.GetInst().isGenerateWorld = false;
+            }
         }
         GUILayout.EndHorizontal();
         #endregion
 
         #region Save & Load Map
         GUILayout.Space(10);
-        GUILayout.Label("맵 저장", style_Lable);
+        GUILayout.Label("저장", style_Lable);
         EELOMapEditorCore.GetInst().mapDatafilePath = EditorGUILayout.TextField("기본 경로", EELOMapEditorCore.GetInst().mapDatafilePath);
 
         GUILayout.Space(2);
-        _text_saveMapFilename   = EditorGUILayout.TextField("저장할 월드맵 파일명", _text_saveMapFilename);
-        _chk_save_filename      = GUILayout.Toggle(_chk_save_filename, "확인");
-        GUI.enabled             = _chk_save_filename && _text_saveMapFilename.Length > 2;
-        if (GUILayout.Button("Save 월드맵 [덮어쓰기]", st_btn_left))
-        {
-            EELOMapEditorCore.GetInst().ExportMapData(_text_saveMapFilename, ETileLayerType.Instance);
-            EELOMapEditorCore.GetInst().ExportMapData(_text_saveMapFilename, ETileLayerType.Location);
-            EELOMapEditorCore.GetInst().ExportMapData(_text_saveMapFilename, ETileLayerType.Collision);
-            EELOMapEditorCore.GetInst().ExportMapData(_text_saveMapFilename, ETileLayerType.Trigger);
-            EELOMapEditorCore.GetInst().ExportMapData(_text_saveMapFilename, ETileLayerType.Hill);
+        _text_saveMapFilename   = EditorGUILayout.TextField("파일명", _text_saveMapFilename);
 
-            EELOMapEditorCore.GetInst().SaveETPreset();
-            _chk_save_filename = false;
+        GUI.enabled             = _text_saveMapFilename != null;
+
+        if (GUILayout.Button("월드맵 저장", st_btn_left))
+        {
+            if (EditorUtility.DisplayDialog("알림", "맵을 저장합니다?", "넵", "아니요"))
+            {
+                int failed = 0;
+                if (EELOMapEditorCore.GetInst().FileExistCheck(_text_saveMapFilename))
+                {
+                    bool res = EditorUtility.DisplayDialog("알림", "같은 이름의 파일이 있습니다 \n 덮어쓰시겠어요?", "덮어쓰기", "아니요");
+                    if(res)
+                    {
+                        if (EELOMapEditorCore.GetInst().ExportMapData(_text_saveMapFilename, ETileLayerSaveType.Floor) == false) failed += 1;
+                        if (EELOMapEditorCore.GetInst().ExportMapData(_text_saveMapFilename, ETileLayerSaveType.Location) == false) failed += 10;
+                        if (EELOMapEditorCore.GetInst().ExportMapData(_text_saveMapFilename, ETileLayerSaveType.Collision) == false) failed += 100;
+                        if (EELOMapEditorCore.GetInst().ExportMapData(_text_saveMapFilename, ETileLayerSaveType.Event) == false) failed += 1000;
+                        if (EELOMapEditorCore.GetInst().ExportMapData(_text_saveMapFilename, ETileLayerSaveType.Hill) == false) failed += 10000;
+                        if (EELOMapEditorCore.GetInst().SavePresetToJson() == false) failed+=100000;
+                        if (failed == 0)
+                        {
+                            EditorUtility.DisplayDialog("알림", "저장 성공!", "확인");
+                        }
+                        else
+                        {
+                            EditorUtility.DisplayDialog("알림", $"저장 실패! CODE : {failed}", "확인");
+                        }
+                    }
+                }
+                else
+                {
+                    if (EELOMapEditorCore.GetInst().ExportMapData(_text_saveMapFilename, ETileLayerSaveType.Floor) == false) failed += 1;
+                    if (EELOMapEditorCore.GetInst().ExportMapData(_text_saveMapFilename, ETileLayerSaveType.Location) == false) failed += 10;
+                    if (EELOMapEditorCore.GetInst().ExportMapData(_text_saveMapFilename, ETileLayerSaveType.Collision) == false) failed += 100;
+                    if (EELOMapEditorCore.GetInst().ExportMapData(_text_saveMapFilename, ETileLayerSaveType.Event) == false) failed += 1000;
+                    if (EELOMapEditorCore.GetInst().ExportMapData(_text_saveMapFilename, ETileLayerSaveType.Hill) == false) failed += 10000;
+                    if (EELOMapEditorCore.GetInst().SavePresetToJson() == false) failed += 100000;
+                    if (failed == 0)
+                    {
+                        EditorUtility.DisplayDialog("알림", "저장 성공!", "확인");
+                    }
+                    else
+                    {
+                        EditorUtility.DisplayDialog("알림", $"저장 실패! CODE : {failed}", "확인");
+                    }
+                }
+            }
         }
         GUI.enabled = true;
 
         GUILayout.Space(10);
-        GUILayout.Label("맵 불러오기", style_Lable);
+        GUILayout.Label("불러오기", style_Lable);
         GUILayout.Space(2);
-        _text_loadMapFilename   = EditorGUILayout.TextField("로드할 월드맵 파일명", _text_loadMapFilename);
-        _chk_load_filename      = GUILayout.Toggle(_chk_load_filename, "확인");
-        GUI.enabled             = _chk_load_filename && _text_loadMapFilename.Length > 2;
-        if (GUILayout.Button("Load 월드맵 ", st_btn_left))
+        _text_loadMapFilename   = EditorGUILayout.TextField("파일명", _text_loadMapFilename);
+      
+        GUI.enabled             = _text_loadMapFilename != null;
+        if (GUILayout.Button("월드맵 불러오기 ", st_btn_left))
         {
-            try
+            if (EditorUtility.DisplayDialog("알림", "맵을 로드하시겠습니까? \n 기존 맵은 지워지니 저장해주세요", "로드", "아니요"))
             {
-                UKHMapUtility.SerializableGridData data = EELOMapEditorCore.GetInst().GetLoadWorldData(_text_loadMapFilename);
+                try
+                {
+                    UKH.SerializableGridData data = EELOMapEditorCore.GetInst().GetLoadWorldData(_text_loadMapFilename);
 
-                int sizeX = data.gridData.Count;
-                int sizeY = data.gridData[0].Length;
-            
-                EELOMapEditorCore.GetInst().ReCreateTileAssetObject(sizeX, sizeY);
-                EELOMapEditorCore.GetInst().LoadAllTODFromAssetDatabase();
-                EELOMapEditorCore.GetInst().ImportMapData(_text_loadMapFilename, ETileLayerType.Instance);
-                EELOMapEditorCore.GetInst().ImportMapData(_text_loadMapFilename, ETileLayerType.Location);
-                EELOMapEditorCore.GetInst().ImportMapData(_text_loadMapFilename, ETileLayerType.Collision);
-                EELOMapEditorCore.GetInst().ImportMapData(_text_loadMapFilename, ETileLayerType.Trigger);
-                EELOMapEditorCore.GetInst().ImportMapData(_text_loadMapFilename, ETileLayerType.Hill);
-                _chk_load_filename = false;
+                    int sizeX = data.gridData.Count;
+                    int sizeY = data.gridData[0].Length;
+
+                    EELOMapEditorCore.GetInst().ReCreateTileAssetObject(sizeX, sizeY);
+                    EELOMapEditorCore.GetInst().LoadAllPresetFromAssetDatabase();
+                    EELOMapEditorCore.GetInst().ImportMapData(_text_loadMapFilename, ETileLayerSaveType.Floor);
+                    EELOMapEditorCore.GetInst().ImportMapData(_text_loadMapFilename, ETileLayerSaveType.Location);
+                    EELOMapEditorCore.GetInst().ImportMapData(_text_loadMapFilename, ETileLayerSaveType.Collision);
+                    EELOMapEditorCore.GetInst().ImportMapData(_text_loadMapFilename, ETileLayerSaveType.Event);
+                    EELOMapEditorCore.GetInst().ImportMapData(_text_loadMapFilename, ETileLayerSaveType.Hill);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError("맵데이터 로드실패");
+                }
             }
-            catch (Exception ex)
-            {
-                Debug.LogError("맵데이터 로드실패");
-            }
-           
         }
         GUI.enabled = true;
         #endregion
@@ -237,30 +277,27 @@ public class MapEditorWnd : EditorWindow
             coreOBJ.GetComponent<EELOMapEditorCore>()._cashDBGSelectTile = Resources.Load<Tile>("TileDefault/selected_tile");
             coreOBJ.GetComponent<EELOMapEditorCore>()._cashCollisionTile = Resources.Load<Tile>("TileDefault/collision_tile");
             coreOBJ.GetComponent<EELOMapEditorCore>()._cashTileHill      = Resources.Load<Tile>("TileDefault/hill_tile");
-            coreOBJ.GetComponent<EELOMapEditorCore>()._cashEntityTriggerTile = Resources.Load<TileBase>($"TileDefault/EntityEventTile/EET_1000");
-            if (coreOBJ.GetComponent<EELOMapEditorCore>()._cashTriggerTileSet == null)
-            {
-                coreOBJ.GetComponent<EELOMapEditorCore>()._cashTriggerTileSet = new List<TileBase>();
-                for (int i = 0; i < 30; i++)
-                    coreOBJ.GetComponent<EELOMapEditorCore>()._cashTriggerTileSet.Add(Resources.Load<TileBase>($"TileDefault/EventTile/ET_{i}"));
-            }
-          
+            coreOBJ.GetComponent<EELOMapEditorCore>()._cashCommonEventTile = Resources.Load<TileBase>($"TileDefault/EventTile/ET_0");
+            coreOBJ.GetComponent<EELOMapEditorCore>()._cashGatherEventTile = Resources.Load<TileBase>($"TileDefault/EntityEventTile/EET_1000");
+
             //재생성 가능
             GameObject cash0 = GenerateGameObject.GenerateTilemapFrame(gridOBJ.transform);
-            GameObject cash1 = GenerateGameObject.GenerateTilemapLocationBase(gridOBJ.transform);
-            GameObject cash2 = GenerateGameObject.GenerateTilemapInstance(gridOBJ.transform);
-            GameObject cash3 = GenerateGameObject.GenerateTilemapCollision(gridOBJ.transform);
-            GameObject cash4 = GenerateGameObject.GenerateTilemapTrigger(gridOBJ.transform);
-            GameObject cash5 = GenerateGameObject.GenerateTilemapHill(gridOBJ.transform);
-            GameObject cash6 = GenerateGameObject.GenerateTilemapDebuging(gridOBJ.transform);
+            GameObject cash1 = GenerateGameObject.GenerateTilemapFloor(0,gridOBJ.transform);
+            GameObject cash2 = GenerateGameObject.GenerateTilemapFloor(1,gridOBJ.transform);
+            GameObject cash3 = GenerateGameObject.GenerateTilemapFloor(2,gridOBJ.transform);
+            GameObject cash4 = GenerateGameObject.GenerateTilemapCollision(gridOBJ.transform);
+            GameObject cash5 = GenerateGameObject.GenerateTilemapEvent(gridOBJ.transform);
+            GameObject cash6 = GenerateGameObject.GenerateTilemapHill(gridOBJ.transform);
+            GameObject cash7 = GenerateGameObject.GenerateTilemapDebuging(gridOBJ.transform);
 
             coreOBJ.GetComponent<EELOMapEditorCore>().LinkFrameTilemaps(cash0);
-            coreOBJ.GetComponent<EELOMapEditorCore>().LinkLocationTilemaps(cash1);
-            coreOBJ.GetComponent<EELOMapEditorCore>().LinkInstanceTilemaps(cash2);
-            coreOBJ.GetComponent<EELOMapEditorCore>().LinkCollisionTilemaps(cash3);
-            coreOBJ.GetComponent<EELOMapEditorCore>().LinkTriggerTilemaps(cash4);
-            coreOBJ.GetComponent<EELOMapEditorCore>().LinkHillTilemaps(cash5);
-            coreOBJ.GetComponent<EELOMapEditorCore>().LinkDebugTilemaps(cash6);
+            coreOBJ.GetComponent<EELOMapEditorCore>().LinkInstanceTilemaps(0, cash1);
+            coreOBJ.GetComponent<EELOMapEditorCore>().LinkInstanceTilemaps(1, cash2);
+            coreOBJ.GetComponent<EELOMapEditorCore>().LinkInstanceTilemaps(2, cash3);
+            coreOBJ.GetComponent<EELOMapEditorCore>().LinkCollisionTilemaps(cash4);
+            coreOBJ.GetComponent<EELOMapEditorCore>().LinkEventTilemaps(cash5);
+            coreOBJ.GetComponent<EELOMapEditorCore>().LinkHillTilemaps(cash6);
+            coreOBJ.GetComponent<EELOMapEditorCore>().LinkDebugTilemaps(cash7);
         }
     }
 }
@@ -272,7 +309,7 @@ public class PaletteWnd : EditorWindow
     Vector2         _scrollPositionLeft  = new Vector2(0, 0);
 
     //선택한 데이터 캐싱
-    DBPresetTileOBJ    _cashingPreviewOBJ  = null; 
+    DBPresetTileSO    _cashingPreviewOBJ  = null; 
     string              _findObjectTextFieldCashing;
 
     //삭제할 데이터 캐싱
@@ -284,19 +321,20 @@ public class PaletteWnd : EditorWindow
         thisWnd.position = new Rect(
             GUILayoutUtility.GetLastRect().x, 
             GUILayoutUtility.GetLastRect().y, 
-            350,
+            450,
             550);
-        thisWnd.minSize = new Vector2(400, 550);
-        EELOMapEditorCore.GetInst().LoadAllTODFromAssetDatabase();
+        thisWnd.minSize = new Vector2(450, 550);
+        EELOMapEditorCore.GetInst().LoadAllPresetFromAssetDatabase();
     }
 
     public void OnGUI()
     {
         //브러쉬 위치보정용 슬라이더 바
-        GUI.color = GUIStyleDefine.GetColorGYellow();
-        GUILayout.Space(10);
+        GUI.color = Color.red;
+        EELOMapEditorCore.GetInst().cashWorldEventTriggerIdx = EditorGUILayout.IntField("이벤트타일 넘버설정", EELOMapEditorCore.GetInst().cashWorldEventTriggerIdx);
 
-        EELOMapEditorCore.GetInst().cashWorldEventTriggerIdx     = EditorGUILayout.IntField("이벤트타일 넘버설정", EELOMapEditorCore.GetInst().cashWorldEventTriggerIdx);
+        GUILayout.Space(10);
+        GUI.color = GUIStyleDefine.GetColorGYellow();
         EELOMapEditorCore.GetInst().brushCorrectionXY   = (int)EditorGUILayout.Slider("브러쉬 위치값 보정", EELOMapEditorCore.GetInst().brushCorrectionXY, -100f, 100f);
         EELOMapEditorCore.GetInst().isCorrectDetail     = GUILayout.Toggle(EELOMapEditorCore.GetInst().isCorrectDetail, "세부조정");
         
@@ -305,7 +343,7 @@ public class PaletteWnd : EditorWindow
         EELOMapEditorCore.GetInst().brushCorrectionY    = (int)EditorGUILayout.Slider("브러쉬 위치값 조절 ( Y )", EELOMapEditorCore.GetInst().brushCorrectionY, -100f, 100f);
         GUI.enabled = true;
 
-        GUILayout.Space(10);
+        GUILayout.Space(5);
         EELOMapEditorCore.GetInst().brushSize           = (int)EditorGUILayout.Slider("브러쉬/지우개 크기 조절", EELOMapEditorCore.GetInst().brushSize, 1f, 10f);
        
         //오브젝트 만들기 ===========================
@@ -322,11 +360,10 @@ public class PaletteWnd : EditorWindow
         {
             ModifyObjectWnd createOBJWnd = (ModifyObjectWnd)EditorWindow.GetWindow<ModifyObjectWnd>("TOD수정기 [215 STUDIO MAP EDITOR]", this.GetType());
         }
-
         if (GUILayout.Button("오브젝트 삭제 ", style_create_obj_button))
         {
             //선택된 파일의 전체경로
-            string[] fullPath = EditorUtility.OpenFilePanel("Select Image File", $"{Application.dataPath}/Resources/InstTile", "asset").Split('/');
+            string[] fullPath = EditorUtility.OpenFilePanel("Select Image File", $"{Application.dataPath}/Resources/PresetSO", "asset").Split('/');
 
             //파일 이름
             string fileName = fullPath[fullPath.Length - 1].Split('.')[0];
@@ -335,12 +372,12 @@ public class PaletteWnd : EditorWindow
             _delfileNameCashing = fileName;
 
             //데이터 삭제
-            DBPresetTileOBJ delOBJ = EELOMapEditorCore.GetInst().GetTOD(_delfileNameCashing);
+            DBPresetTileSO delOBJ = EELOMapEditorCore.GetInst().GetPresetSOFromAssetDatabase(_delfileNameCashing);
             if(delOBJ != null)
             {
-                if(delOBJ._isBaseLocPlane)
-                    EELOMapEditorCore.GetInst().DelLocSO(delOBJ._locationType);
-                else 
+                //if(delOBJ._isBaseLocPlane)
+                //    EELOMapEditorCore.GetInst().DelLocSO(delOBJ._locationType);
+                //else 
                     EELOMapEditorCore.GetInst().DelInstSO(delOBJ._guidTOBJ);
 
             }
@@ -351,56 +388,57 @@ public class PaletteWnd : EditorWindow
         GUILayout.BeginHorizontal();
         //왼쪽패널--------------------------------------------------
         GUI.color = GUIStyleDefine.GetColorBase();
-        GUILayout.BeginArea(new Rect(0, 160, 150, 450));
+        GUILayout.BeginArea(new Rect(0, 160, 150, 650));
 
         /*|||||||||*/GUILayout.BeginVertical();
+        GUILayout.Label("이름 필터로 빠른 검색");
         _findObjectTextFieldCashing = GUILayout.TextField(_findObjectTextFieldCashing, new GUIStyle(GUI.skin.textField));
        
-        if (GUILayout.Button("이름으로 검색", GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 13)))
-        {
-            DBPresetTileOBJ findOBJ = null;
-            if (_findObjectTextFieldCashing.Length >= 2)
-            {
-                List<DBPresetTileOBJ> cashingInst = EELOMapEditorCore.GetInst().GetaAllInstSO();
-                foreach (DBPresetTileOBJ cObj in cashingInst)
-                {
-                    if (cObj.name.Contains(_findObjectTextFieldCashing))
-                    {
-                        findOBJ = cObj;
-                    }
-                }
-                if(findOBJ == null)
-                {
-                    List<DBPresetTileOBJ> cashingLoc = EELOMapEditorCore.GetInst().GetaAllLocSO();
-                    foreach (DBPresetTileOBJ cObj in cashingLoc)
-                    {
-                        if (cObj.name.Contains(_findObjectTextFieldCashing))
-                        {
-                            findOBJ = cObj;
-                        }
-                    }
-                }
-            }
-            if(findOBJ != null)
-            {
-                if (findOBJ._isBaseLocPlane)
-                {
-                    EELOMapEditorCore.GetInst().SelectBrushLocation();
-                    EELOMapEditorCore.GetInst()._cashLocBrushedSO = findOBJ;
-
-                }
-                else
-                {
-                    EELOMapEditorCore.GetInst().SelectBrushInst();
-                    EELOMapEditorCore.GetInst()._cashInstBrushedSO = findOBJ;
-                }
-                _cashingPreviewOBJ = findOBJ;
-            }
-            else
-            {
-                Debug.LogError("파일 찾기 실패");
-            }
-        }
+        //if (GUILayout.Button("이름으로 검색", GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 13)))
+        //{
+        //    DBPresetTileSO findOBJ = null;
+        //    if (_findObjectTextFieldCashing.Length >= 2)
+        //    {
+        //        List<DBPresetTileSO> cashingInst = EELOMapEditorCore.GetInst().GetaAllInstSO();
+        //        foreach (DBPresetTileSO cObj in cashingInst)
+        //        {
+        //            if (cObj.name.Contains(_findObjectTextFieldCashing))
+        //            {
+        //                findOBJ = cObj;
+        //            }
+        //        }
+        //        //if(findOBJ == null)
+        //        //{
+        //        //    List<DBPresetTileSO> cashingLoc = EELOMapEditorCore.GetInst().GetaAllLocSO();
+        //        //    foreach (DBPresetTileSO cObj in cashingLoc)
+        //        //    {
+        //        //        if (cObj.name.Contains(_findObjectTextFieldCashing))
+        //        //        {
+        //        //            findOBJ = cObj;
+        //        //        }
+        //        //    }
+        //        //}
+        //    }
+        //    if(findOBJ != null)
+        //    {
+        //        //if (findOBJ._isLocation)
+        //        //{
+        //        //    EELOMapEditorCore.GetInst().SelectBrushLocation();
+        //        //    EELOMapEditorCore.GetInst()._cashLocBrushedSO = findOBJ;
+        //        //
+        //        //}
+        //        //else
+        //        {
+        //            EELOMapEditorCore.GetInst().SelectBrushInstLayer();
+        //            EELOMapEditorCore.GetInst()._cashBrushedSO = findOBJ;
+        //        }
+        //        _cashingPreviewOBJ = findOBJ;
+        //    }
+        //    else
+        //    {
+        //        Debug.LogError("파일 찾기 실패");
+        //    }
+        //}
 
         //선택한 이미지 랜더링
 
@@ -409,12 +447,12 @@ public class PaletteWnd : EditorWindow
             GUILayout.Box(_cashingPreviewOBJ._texture, GUILayout.Width(_cashingPreviewOBJ._texture.width), GUILayout.Height(_cashingPreviewOBJ._texture.height));
             GUILayout.Label($"GUID      : {_cashingPreviewOBJ._guidTOBJ.ToString()}");
             GUILayout.Label($"이름      : {_cashingPreviewOBJ._filename.ToString()}");
-            GUILayout.Label(_cashingPreviewOBJ._isBaseLocPlane ?  $"지역타일" : "일반타일");
-            if (_cashingPreviewOBJ._isBaseLocPlane) GUI.color = Color.cyan;
-            GUILayout.Label(_cashingPreviewOBJ._isBaseLocPlane ?  $"지역 : {_cashingPreviewOBJ. _locationType.ToString()}" : "지역 : 범용");
+            GUILayout.Label(_cashingPreviewOBJ._isLocation ?  $"지역타일" : "일반타일");
+            if (_cashingPreviewOBJ._isLocation) GUI.color = Color.cyan;
+            GUILayout.Label(_cashingPreviewOBJ._isLocation ?  $"지역 : {_cashingPreviewOBJ. _locationType.ToString()}" : "지역 : 범용");
             GUI.color = GUIStyleDefine.GetColorBase();
-            GUI.color = _cashingPreviewOBJ._entityEventIdx > 999 ? Color.yellow : GUIStyleDefine.GetColorBase();
-            GUILayout.Label($"게체이벤트 넘버 : {_cashingPreviewOBJ._entityEventIdx}");
+            GUI.color = _cashingPreviewOBJ._gatherEventIdx > 999 ? Color.yellow : GUIStyleDefine.GetColorBase();
+            GUILayout.Label($"게체이벤트 넘버 : {_cashingPreviewOBJ._gatherEventIdx}");
             GUI.color = GUIStyleDefine.GetColorBase();
             GUI.color = _cashingPreviewOBJ._isUseAnim ? Color.cyan : GUIStyleDefine.GetColorBase(); 
             GUILayout.Label($"애니메이션 여부 : {_cashingPreviewOBJ._isUseAnim.ToString()}");
@@ -423,82 +461,100 @@ public class PaletteWnd : EditorWindow
             GUI.color = GUIStyleDefine.GetColorBase();
             GUILayout.Label($"기본 텍스쳐 : {_cashingPreviewOBJ._texture.ToString()}");
             GUILayout.Label($"타일이름  : {_cashingPreviewOBJ._tile.name}");
-            GUILayout.Label($"기본 텍스쳐 : {_cashingPreviewOBJ._isEntityEvent.ToString()}");          
+            GUILayout.Label($"피봇 스타일 : {_cashingPreviewOBJ._pivotAlignment.ToString()}");          
         }
 
         GUILayout.EndArea();
         /*|||||||||*/GUILayout.EndVertical();
 
         //오른쪽패널------------------------------------------------
-        GUILayout.BeginArea(new Rect(150, 160, 250, 450));
-        _scrollPositionRight = GUILayout.BeginScrollView(_scrollPositionRight, false, true, GUILayout.Width(250), GUILayout.Height(450));
-        List<DBPresetTileOBJ> cashTODInst = EELOMapEditorCore.GetInst().GetaAllInstSO();
-        List<DBPresetTileOBJ> cashTableLoc = EELOMapEditorCore.GetInst().GetaAllLocSO();
+        GUILayout.BeginArea(new Rect(150, 160, 300, 450));
+        _scrollPositionRight = GUILayout.BeginScrollView(_scrollPositionRight, false, true, GUILayout.Width(300), GUILayout.Height(450));
+        List<DBPresetTileSO> cashPresetSO = EELOMapEditorCore.GetInst().GetaAllInstSO();
+        //List<DBPresetTileSO> cashTableLoc = EELOMapEditorCore.GetInst().GetaAllLocSO();
 
         //LOC =====================================
-        for (int i = 0; i < cashTableLoc.Count; i++)
-        {
-            if (i == 0)
-            {
-                /*-------*/
-                GUILayout.BeginHorizontal();
-            }
-            if (i % 3 == 0)
-            {
-                /*-------*/
-                GUILayout.EndHorizontal();
-                /*-------*/
-                GUILayout.BeginHorizontal();
-            }
-            if (i == cashTableLoc.Count - 1)
-            {
-                /*-------*/
-                GUILayout.EndHorizontal();
-            }
-
-            /*|||||||||*/
-            GUILayout.BeginVertical();
-            GUI.color = GUIStyleDefine.GetColorGBlue();
-            int maxLength = cashTableLoc[i]._filename.Length > 7 ? 7 : cashTableLoc[i]._filename.Length;
-            GUILayout.Label(cashTableLoc[i]._filename.Substring(0, maxLength));
-            GUI.color = GUIStyleDefine.GetColorBase();
-
-            if (GUILayout.Button(cashTableLoc[i]._texture, new GUIStyle(GUI.skin.button), GUILayout.Width(50), GUILayout.Height(50)))
-            {
-                EELOMapEditorCore.GetInst().SelectBrushLocation();
-                EELOMapEditorCore.GetInst()._cashLocBrushedSO = cashTableLoc[i];
-                _cashingPreviewOBJ = cashTableLoc[i];
-            }
-            /*|||||||||*/
-            GUILayout.EndVertical();
-        }
+        //for (int i = 0; i < cashTableLoc.Count; i++)
+        //{
+        //    if (i == 0)
+        //    {
+        //        /*-------*/
+        //        GUILayout.BeginHorizontal();
+        //    }
+        //    if (i % 3 == 0)
+        //    {
+        //        /*-------*/
+        //        GUILayout.EndHorizontal();
+        //        /*-------*/
+        //        GUILayout.BeginHorizontal();
+        //    }
+        //    if (i == cashTableLoc.Count - 1)
+        //    {
+        //        /*-------*/
+        //        GUILayout.EndHorizontal();
+        //    }
+        //
+        //    /*|||||||||*/
+        //    GUILayout.BeginVertical();
+        //    GUI.color = GUIStyleDefine.GetColorGBlue();
+        //    int maxLength = cashTableLoc[i]._filename.Length > 7 ? 7 : cashTableLoc[i]._filename.Length;
+        //    GUILayout.Label(cashTableLoc[i]._filename.Substring(0, maxLength));
+        //    GUI.color = GUIStyleDefine.GetColorBase();
+        //
+        //    if (GUILayout.Button(cashTableLoc[i]._texture, new GUIStyle(GUI.skin.button), GUILayout.Width(50), GUILayout.Height(50)))
+        //    {
+        //        EELOMapEditorCore.GetInst().SelectBrushLocation();
+        //        EELOMapEditorCore.GetInst()._cashLocBrushedSO = cashTableLoc[i];
+        //        _cashingPreviewOBJ = cashTableLoc[i];
+        //    }
+        //    /*|||||||||*/
+        //    GUILayout.EndVertical();
+        //}
 
         //INST ====================================
-        for (int i = 0; i < cashTODInst.Count; i++)
+        for (int i = 0; i < cashPresetSO.Count; i++)
         {
-            if(i == 0)
+            //필터적용
+            if (_findObjectTextFieldCashing != null && cashPresetSO[i]._filename.Contains(_findObjectTextFieldCashing) == false)
+                continue;
+
+            if (i == 0)
             {
                 /*-------*/GUILayout.BeginHorizontal();
             }
-            if(i % 3 == 0)
+            if(i % 5 == 0)
             {
                 /*-------*/GUILayout.EndHorizontal();
                 /*-------*/GUILayout.BeginHorizontal();
             }
-            if( i == cashTODInst.Count - 1)
+            if( i == cashPresetSO.Count - 1)
             {
                 /*-------*/GUILayout.EndHorizontal();
             }
 
             /*|||||||||*/GUILayout.BeginVertical();
-            int maxLength = cashTODInst[i]._filename.Length > 7 ? 7 : cashTODInst[i]._filename.Length;
-            GUILayout.Label(cashTODInst[i]._filename.Substring(0, maxLength));
 
-            if (GUILayout.Button(cashTODInst[i]._texture, new GUIStyle(GUI.skin.button), GUILayout.Width(50), GUILayout.Height(50)))
+
+            if (cashPresetSO[i]._isLocation)
+                GUI.color = GUIStyleDefine.GetColorGBlue();
+            else if (cashPresetSO[i]._isGatherEvent)
+                GUI.color = GUIStyleDefine.GetColorGYellow();
+
+            int maxLength = cashPresetSO[i]._filename.Length > 7 ? 7 : cashPresetSO[i]._filename.Length;
+            GUILayout.Label(cashPresetSO[i]._filename.Substring(0, maxLength));
+            GUI.color = Color.white;
+            if (GUILayout.Button(cashPresetSO[i]._texture, new GUIStyle(GUI.skin.button), GUILayout.Width(50), GUILayout.Height(50)))
             {
-                EELOMapEditorCore.GetInst().SelectBrushInst();
-                EELOMapEditorCore.GetInst()._cashInstBrushedSO = cashTODInst[i];
-                _cashingPreviewOBJ = cashTODInst[i];
+                //if (cashPresetSO[i]._isLocation)
+                //{
+                //    EELOMapEditorCore.GetInst().SelectBrushLocationLayer();
+                //}
+                //else
+                {
+                    EELOMapEditorCore.GetInst().SelectBrushInstLayer();
+                }
+                EELOMapEditorCore.GetInst()._cashBrushedSO = cashPresetSO[i];
+                _cashingPreviewOBJ = cashPresetSO[i];
             }
             /*|||||||||*/GUILayout.EndVertical();
         }
@@ -508,38 +564,42 @@ public class PaletteWnd : EditorWindow
     }
 }
 
+public enum EPivotStyle
+{
+    Center = 0,
+    TopLeft,
+    TopCenter,
+    TopRight,
+    LeftCenter,
+    RightCenter,
+    BottomLeft,
+    BottomCenter,
+    BottomRight
+}
 public class CreateObjectWnd : EditorWindow
 {
-    public  Texture2D      _cacheTexture;
-    private string         _selectedIMGFileName = "";
+    public  Texture2D           _cacheTexture;
+    private string              _selectedIMGFileName = "";
     // ///
-    public ELocationTypeData    _locationType;
+    private string              _filename = "";
+    public ELocationTypeData    _locationType = ELocationTypeData.max;
     public bool                 _isBaseLocPlane;
+
     public bool                 _isUseAnim;
     public List<string>         _animTexfileNameList;
     public List<Texture2D>      _animTextureList;
-    public bool                 _isEntityEvent;
-    public int                  _entityEventIdx;
-    public bool                 _isPivotDown;
-    public bool                 _isPivotUp;
+
+    public bool                 _isGatherEvent;
+    public int                  _gatherEventIdx;
+
+    public SpriteAlignment      _pivotStyle;
+
     int animCount = 0;
 
     [Obsolete]
     void OnGUI()
     {
         GUI.color       = GUIStyleDefine.GetColorGreen();
-
-        if (GUILayout.Button("이미지 파일 선택", GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 15)))
-        {
-            //선택된 파일의 전체경로
-            string[] fullPath          = EditorUtility.OpenFilePanel("Select Image File", $"{Application.dataPath}/Resources/Bin/Sprites", "png").Split('/');
-
-            //파일이름
-            string   fileName          = fullPath[fullPath.Length - 1];
-
-            //확장자 분리
-            _selectedIMGFileName       = fileName.Split('.')[0];
-        }
 
         //================================ 이미지 미리보기 ====================================
         GUILayout.BeginHorizontal();
@@ -565,7 +625,16 @@ public class CreateObjectWnd : EditorWindow
         }
         GUILayout.Box("",    GUILayout.Width(100), GUILayout.Height(100));
         GUILayout.EndHorizontal();
-        //-------------------------------------------------------------------------------------
+        //------------------------------------------------------------------------------------
+
+        _filename = EditorGUILayout.TextField("파일명", _filename);
+
+        if (GUILayout.Button("이미지 파일 선택", GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 15)))
+        {
+            string[] fullPath = EditorUtility.OpenFilePanel("Select Image File", $"{Application.dataPath}/Resources/Bin/Sprites", "png").Split('/');    //선택된 파일의 전체경로
+            string fileName = fullPath[fullPath.Length - 1];        //파일이름
+            _selectedIMGFileName = fileName.Split('.')[0];          //확장자 분리
+        }
 
 
         //=================================== 옵션 설정 ========================================
@@ -577,17 +646,17 @@ public class CreateObjectWnd : EditorWindow
         }
         _isBaseLocPlane      = EditorGUILayout.Toggle("지역설정 타일인가",   _isBaseLocPlane);
         GUI.enabled          = _isBaseLocPlane;
-        _locationType        = (ELocationTypeData)EditorGUILayout.EnumPopup("지역:", _locationType);
+        _locationType        =  (ELocationTypeData)EditorGUILayout.EnumPopup("지역:", _locationType);
         GUI.enabled          = true;
 
-        _isEntityEvent       = EditorGUILayout.Toggle("개체이벤트 타일인가", _isEntityEvent);
-        GUI.enabled          = _isEntityEvent;
+        _isGatherEvent       = EditorGUILayout.Toggle("채집 여부", _isGatherEvent);
+        GUI.enabled          = _isGatherEvent;
 
-        _entityEventIdx      = EditorGUILayout.IntField("개체이벤트 넘버(1000 ~)", _entityEventIdx);
+        _gatherEventIdx      = EditorGUILayout.IntField("채집이벤트 넘버(1000 ~)", _gatherEventIdx);
+
         GUI.enabled          = true;
+        _pivotStyle          = (SpriteAlignment)EditorGUILayout.EnumPopup("피봇 :", _pivotStyle);
 
-        _isPivotDown         = EditorGUILayout.Toggle("이미지 피봇 아래고정", _isPivotDown);
-        _isPivotUp           = EditorGUILayout.Toggle("이미지 피봇 위 고정", _isPivotUp);
         _isUseAnim           = EditorGUILayout.Toggle("애니메이션 사용", _isUseAnim);
         GUI.enabled          = _isUseAnim;
 
@@ -598,6 +667,7 @@ public class CreateObjectWnd : EditorWindow
             _animTextureList        = new List<Texture2D>();
             _animTexfileNameList    = new List<string>();
         }
+
         animCount            = EditorGUILayout.IntField("프레임 수", animCount);
         GUI.enabled          = animCount > 0;
         for (int i = 0; i < animCount; i++)
@@ -628,65 +698,55 @@ public class CreateObjectWnd : EditorWindow
         //생성 이벤트
         if (GUILayout.Button("생성", GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 15)))
         {
-            if(_selectedIMGFileName != "")
+            if(_filename != "" && _selectedIMGFileName != "")
             {
-                //새로운 타일을 생성
+                ///새로운 타일을 생성
                 Tile newTile   = new Tile();
-                newTile.name   = _selectedIMGFileName;
-                newTile.sprite = Resources.Load<Sprite>($"Bin/Sprites/{_selectedIMGFileName}");
-                //타일 생성할때에 sprite pivot도 아래로 고정
-                //if (!_isBaseLocPlane)
-                {
-                    TextureImporter ti = (TextureImporter)AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(newTile.sprite.texture));
-                    TextureImporterSettings texSettings = new TextureImporterSettings();
-                    ti.ReadTextureSettings(texSettings);
-                    if (_isPivotDown)
-                        texSettings.spriteAlignment = (int)SpriteAlignment.BottomCenter;
-                    else if(_isPivotUp)
-                        texSettings.spriteAlignment = (int)SpriteAlignment.TopCenter;
-                    else
-                        texSettings.spriteAlignment = (int)SpriteAlignment.Center;
-                    ti.SetTextureSettings(texSettings);
-                    ti.SaveAndReimport();
-                }
-                //타일 에셋 생성
-                AssetDatabase.CreateAsset(newTile, $"Assets/Resources/Bin/Tile/{_selectedIMGFileName}.asset");
+                newTile.name   = _filename;
+                newTile.sprite = Resources.Load<Sprite>($"Bin/Sprites/{_selectedIMGFileName}"); //이미지 로드
+                TextureImporter ti = (TextureImporter)AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(newTile.sprite.texture)); //타일 생성할때에 sprite pivot
+                TextureImporterSettings texSettings = new TextureImporterSettings();
+                ti.ReadTextureSettings(texSettings);
+                texSettings.spriteAlignment = (int)_pivotStyle;
+                ti.SetTextureSettings(texSettings);
+                ti.SaveAndReimport();
+                AssetDatabase.CreateAsset(newTile, $"Assets/Resources/Bin/Tile/{_filename}.asset"); //타일 에셋 생성
 
+                //메인 GUID 받아오기
                 int guid = FileSystem.ReadTextGUID($"{Application.dataPath}/Resources/GUID.ini");
                 if(guid != -1)
                 {
-                    DBPresetTileOBJ asset = CreateInstance<DBPresetTileOBJ>();
+                    DBPresetTileSO asset = CreateInstance<DBPresetTileSO>();
 
-                    if (asset._isBaseLocPlane == false && EELOMapEditorCore.GetInst().TableInstTile.ContainsKey(guid))
+                    if (EELOMapEditorCore.GetInst().TablePresetTile.ContainsKey(guid))
                     {
                         Debug.LogError("중복된 GUID값입니다. 확인요함");
                         return;
                     }
-                    if (asset._isBaseLocPlane&& EELOMapEditorCore.GetInst().TableLocTile.ContainsKey(asset._locationType))
-                    {
-                        Debug.LogError("중복된 지역값. 확인요함");
-                        return;
-                    }
+                    //if (asset._isBaseLocPlane&& EELOMapEditorCore.GetInst().TableLocTile.ContainsKey(asset._locationType))
+                    //{
+                    //    Debug.LogError("중복된 지역값. 확인요함");
+                    //    return;
+                    //}
 
-                    asset.NewSaveInstTileData(
+                    asset.NewSavePresetTileData(
                         guid,
                         _locationType,
-                        _selectedIMGFileName,
+                        _filename,
                         _isBaseLocPlane,
                         _isUseAnim,
                         _cacheTexture,
                         _animTextureList,
                         newTile,
-                        _isEntityEvent,
-                        _entityEventIdx
+                        _isGatherEvent,
+                        _gatherEventIdx,
+                        _pivotStyle
                         );
 
-                    AssetDatabase.CreateAsset(asset, $"Assets/Resources/InstTile/ITD_{_selectedIMGFileName}.asset");
+                    AssetDatabase.CreateAsset(asset, $"Assets/Resources/PresetSO/PRESET_{_filename}.asset");
                     AssetDatabase.Refresh();
-                    EELOMapEditorCore.GetInst().PushTODTable(asset);
-
+                    EELOMapEditorCore.GetInst().PushPresetSOTable(asset);
                     FileSystem.WriteTextGUID($"{Application.dataPath}/Resources/GUID.ini", guid+1);
-
                     this.Close();
                 }
             }
@@ -702,24 +762,20 @@ public class CreateObjectWnd : EditorWindow
 
 public class ModifyObjectWnd : EditorWindow
 {
-    public Texture2D _cacheTexture;
     // ///
-    public ELocationTypeData _locationType;
+    public ELocationTypeData _locationType = ELocationTypeData.max;
     public bool _isBaseLocPlane;
     public bool _isUseAnim;
     public List<string> _animTexfileNameList;
     public List<Texture2D> _animTextureList;
     public bool _isEntityEvent;
     public int _entityEventIdx;
-    public bool _isPivotDown;
-    public bool _isPivotUp;
-
+    public SpriteAlignment _pivotStyle;
     int animCount = 0;
 
     //삭제수정할 데이터 캐싱
     private string _targetFilenameCashing = "";
-    private string _selectedIMGfileName = "";
-    DBPresetTileOBJ modOBJ = null;
+    DBPresetTileSO modOBJ = null;
 
    [Obsolete]
     void OnGUI()
@@ -728,7 +784,7 @@ public class ModifyObjectWnd : EditorWindow
         if (GUILayout.Button("수정", GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 15)))
         {
             //선택된 파일의 전체경로
-            string[] fullPath = EditorUtility.OpenFilePanel("Select Objs File", $"{Application.dataPath}/Resources/InstTile", "asset").Split('/');
+            string[] fullPath = EditorUtility.OpenFilePanel("Select Objs File", $"{Application.dataPath}/Resources/PresetSO", "asset").Split('/');
 
             //파일 이름
             string fileName = fullPath[fullPath.Length - 1].Split('.')[0];
@@ -737,54 +793,37 @@ public class ModifyObjectWnd : EditorWindow
             _targetFilenameCashing = fileName;
 
             //데이터
-            modOBJ = EELOMapEditorCore.GetInst().GetTOD(_targetFilenameCashing);
+            modOBJ = EELOMapEditorCore.GetInst().GetPresetSOFromAssetDatabase(_targetFilenameCashing);
 
-            _cacheTexture = modOBJ._texture;
             //if (modOBJ != null)
             //    EELOMapEditorCore.GetInst().DelTOD(modOBJ._guidTOBJ);
         }
         GUI.enabled = modOBJ != null;
-
-        if (GUILayout.Button("이미지 파일 선택", GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 15)))
-        {
-            //선택된 파일의 전체경로
-            string[] fullPath = EditorUtility.OpenFilePanel("Select Image File", $"{Application.dataPath}/Resources/Bin/Sprites", "png").Split('/');
-
-            //파일이름
-            string fileName = fullPath[fullPath.Length - 1];
-
-            //확장자 분리
-            _selectedIMGfileName = fileName.Split('.')[0];
-        }
 
         //================================ 이미지 미리보기 ====================================
         GUILayout.BeginHorizontal();
         GUI.color = GUIStyleDefine.GetColorBase();
 
         GUILayout.Box("", GUILayout.Width(100), GUILayout.Height(100));
-        if (_selectedIMGfileName == "")
+        if (modOBJ._texture != null)
         {
             GUILayout.Box("", GUILayout.Width(100), GUILayout.Height(100));
         }
         else
         {
-            GUILayout.Box(_cacheTexture = Resources.Load<Sprite>($"Bin/Sprites/{_selectedIMGfileName}").texture, GUILayout.Width(_cacheTexture.width), GUILayout.Height(_cacheTexture.height));
+            GUILayout.Box(modOBJ._texture, GUILayout.Width(modOBJ._texture.width), GUILayout.Height(modOBJ._texture.height));
         }
         GUILayout.Box("", GUILayout.Width(100), GUILayout.Height(100));
         GUILayout.EndHorizontal();
         //-------------------------------------------------------------------------------------
 
-
         //=================================== 옵션 설정 ========================================
         GUILayout.BeginVertical();
         GUI.color = GUIStyleDefine.GetColorGBlue();
-        if (_selectedIMGfileName != "")
-        {
-            GUILayout.Label(_selectedIMGfileName, GUIStyleDefine.GetTextStlye(TextAnchor.MiddleCenter, Color.cyan, 15));
-        }
+      
         _isBaseLocPlane = EditorGUILayout.Toggle("지역설정 타일인가", _isBaseLocPlane);
         GUI.enabled = modOBJ != null &&_isBaseLocPlane;
-        _locationType = _isBaseLocPlane ? (ELocationTypeData)EditorGUILayout.EnumPopup("지역:", _locationType) : ELocationTypeData.max;
+        _locationType = (ELocationTypeData)EditorGUILayout.EnumPopup("지역:", _locationType);
         GUI.enabled = modOBJ != null;
 
         _isEntityEvent = EditorGUILayout.Toggle("개체이벤트 타일인가", _isEntityEvent);
@@ -792,8 +831,8 @@ public class ModifyObjectWnd : EditorWindow
         _entityEventIdx = EditorGUILayout.IntField("개체이벤트 넘버(1000 ~)", _entityEventIdx);
 
         GUI.enabled = modOBJ != null;
-        _isPivotDown = EditorGUILayout.Toggle("이미지 피봇 아래고정", _isPivotDown);
-        _isPivotUp = EditorGUILayout.Toggle("이미지 피봇 위 고정", _isPivotUp);
+        _pivotStyle = (SpriteAlignment)EditorGUILayout.EnumPopup("피봇:", _pivotStyle);
+
         _isUseAnim = EditorGUILayout.Toggle("애니메이션 사용", _isUseAnim);
         GUI.enabled = modOBJ != null && _isUseAnim;
 
@@ -837,68 +876,17 @@ public class ModifyObjectWnd : EditorWindow
         //생성 이벤트
         if (GUILayout.Button("수정", GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 15)))
         {
-            if (_selectedIMGfileName == "")
+            if (modOBJ != null)
             {
                 modOBJ.ModSaveTileData(
                 _locationType,
                 _isBaseLocPlane,
                 _isUseAnim,
-                _cacheTexture,
                 _animTextureList,
                 _isEntityEvent,
-                _entityEventIdx
+                _entityEventIdx,
+                _pivotStyle
                 );
-            }
-            else
-            {
-                if (modOBJ != null)
-                {
-                    //삭제 후
-                    int guidCashing = modOBJ._guidTOBJ;
-                    EELOMapEditorCore.GetInst().DelInstSO(modOBJ._guidTOBJ);
-
-                    //생성
-                    Tile newTile = new Tile();
-                    newTile.name = _selectedIMGfileName;
-                    newTile.sprite = Resources.Load<Sprite>($"Bin/Sprites/{_selectedIMGfileName}");
-                    //타일 생성할때에 sprite pivot도 아래로 고정
-                    //if (!_isBaseLocPlane)
-                    {
-                        TextureImporter ti = (TextureImporter)AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(newTile.sprite.texture));
-                        TextureImporterSettings texSettings = new TextureImporterSettings();
-                        ti.ReadTextureSettings(texSettings);
-                        if(_isPivotDown)
-                            texSettings.spriteAlignment = (int)SpriteAlignment.BottomCenter;
-                        else if (_isPivotUp)
-                            texSettings.spriteAlignment = (int)SpriteAlignment.TopCenter;
-                        else
-                            texSettings.spriteAlignment = (int)SpriteAlignment.Center;
-                        ti.SetTextureSettings(texSettings);
-                        ti.SaveAndReimport();
-                    }
-                    //타일 에셋 생성
-                    if (_selectedIMGfileName == "") return;
-                    AssetDatabase.CreateAsset(newTile, $"Assets/Resources/Bin/Tile/{_selectedIMGfileName}.asset");
-
-                    DBPresetTileOBJ asset = CreateInstance<DBPresetTileOBJ>();
-
-                    asset.NewSaveInstTileData(
-                        guidCashing,
-                        _locationType,
-                        _selectedIMGfileName,
-                        _isBaseLocPlane,
-                        _isUseAnim,
-                        _cacheTexture,
-                        _animTextureList,
-                        newTile,
-                        _isEntityEvent,
-                        _entityEventIdx);
-
-                  
-                    AssetDatabase.CreateAsset(asset, $"Assets/Resources/InstTile/ITD_{_selectedIMGfileName}.asset");
-                    AssetDatabase.Refresh();
-                    EELOMapEditorCore.GetInst().PushTODTable(asset);
-                }
             }
             AssetDatabase.Refresh();
             this.Close();

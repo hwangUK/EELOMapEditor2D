@@ -16,7 +16,7 @@ public class EXSceneViewEvent : MonoBehaviour
     private bool _isShowCollision;
     private bool _isShowTrigger;
     private bool _isShowHill;
-
+    private bool[] _isShowFloor;
     public bool IsDebugMode { get => _isDebugMode; set => _isDebugMode = value; }
 
     private void OnEnable()
@@ -28,6 +28,7 @@ public class EXSceneViewEvent : MonoBehaviour
             _isShowTrigger = true;
             _isShowHill = true;
             _isDebugMode = true;
+            _isShowFloor = new bool[3] { true, true , true };
             if (!Application.isEditor)
             {
                 Destroy(this);
@@ -74,23 +75,23 @@ public class EXSceneViewEvent : MonoBehaviour
             //브러쉬
             if (EELOMapEditorCore.GetInst().IsSelected_brush_inst)
             {
-                EELOMapEditorCore.GetInst().ProcessBrushing(cellPos, ETileLayerType.Instance);
+                EELOMapEditorCore.GetInst().ProcessBrushing(cellPos, EELOMapEditorCore.GetInst()._floor);
             }
-            else if (EELOMapEditorCore.GetInst().IsSelected_brush_location)
-            {
-                EELOMapEditorCore.GetInst().ProcessBrushing(cellPos, ETileLayerType.Location);
-            }
+            //else if (EELOMapEditorCore.GetInst().IsSelected_brush_location)
+            //{
+            //    EELOMapEditorCore.GetInst().ProcessBrushing(cellPos, ETileLayerType.FloorB1);
+            //}
             else if (EELOMapEditorCore.GetInst().IsSelected_brush_collision)
             {
-                EELOMapEditorCore.GetInst().ProcessBrushing(cellPos, ETileLayerType.Collision);
+                EELOMapEditorCore.GetInst().ProcessBrushing(cellPos, ETileLayerSaveType.Collision);
             }
             else if (EELOMapEditorCore.GetInst().IsSelected_brush_trigger)
             {
-                EELOMapEditorCore.GetInst().ProcessBrushing(cellPos, ETileLayerType.Trigger);
+                EELOMapEditorCore.GetInst().ProcessBrushing(cellPos, ETileLayerSaveType.Event);
             }
             else if (EELOMapEditorCore.GetInst().IsSelected_brush_hill)
             {
-                EELOMapEditorCore.GetInst().ProcessBrushing(cellPos, ETileLayerType.Hill);
+                EELOMapEditorCore.GetInst().ProcessBrushing(cellPos, ETileLayerSaveType.Hill);
             }
 
             //페인트
@@ -101,23 +102,23 @@ public class EXSceneViewEvent : MonoBehaviour
             //지우개
             else if (EELOMapEditorCore.GetInst().IsSelected_erase_inst)
             {
-                EELOMapEditorCore.GetInst().ProcessErasing(cellPos,  ETileLayerType.Instance);
+                EELOMapEditorCore.GetInst().ProcessErasing(cellPos, EELOMapEditorCore.GetInst()._floor);
             }
-            else if (EELOMapEditorCore.GetInst().IsSelected_erase_location)
-            {
-                EELOMapEditorCore.GetInst().ProcessErasing(cellPos,  ETileLayerType.Location);
-            }
+            //else if (EELOMapEditorCore.GetInst().IsSelected_erase_location)
+            //{
+            //    EELOMapEditorCore.GetInst().ProcessErasing(cellPos,  ETileLayerType.FloorB1);
+            //}
             else if (EELOMapEditorCore.GetInst().IsSelected_erase_collision)
             {
-                EELOMapEditorCore.GetInst().ProcessErasing(cellPos,  ETileLayerType.Collision);
+                EELOMapEditorCore.GetInst().ProcessErasing(cellPos,  ETileLayerSaveType.Collision);
             }
             else if (EELOMapEditorCore.GetInst().IsSelected_erase_trigger)
             {
-                EELOMapEditorCore.GetInst().ProcessErasing(cellPos,  ETileLayerType.Trigger);
+                EELOMapEditorCore.GetInst().ProcessErasing(cellPos,  ETileLayerSaveType.Event);
             }
             else if (EELOMapEditorCore.GetInst().IsSelected_erase_hill)
             {
-                EELOMapEditorCore.GetInst().ProcessErasing(cellPos, ETileLayerType.Hill);
+                EELOMapEditorCore.GetInst().ProcessErasing(cellPos, ETileLayerSaveType.Hill);
             }
         }
 
@@ -127,43 +128,43 @@ public class EXSceneViewEvent : MonoBehaviour
         {
             if (curEvent.keyCode == KeyCode.Q)
             {
-                EELOMapEditorCore.GetInst().SelectBrushInst();
+                EELOMapEditorCore.GetInst().SelectBrushInstLayer();
             }
             else if (curEvent.keyCode == KeyCode.W)
             {
-                EELOMapEditorCore.GetInst().SelectEraseInst();
+                EELOMapEditorCore.GetInst().SelectEraseInstLayer();
             }
-            else if (curEvent.keyCode == KeyCode.E)
-            {
-                EELOMapEditorCore.GetInst().SelectBrushLocation();
-            }
-            else if (curEvent.keyCode == KeyCode.R)
-            {
-                EELOMapEditorCore.GetInst().SelectEraseLocation();
-            }
+            //else if (curEvent.keyCode == KeyCode.E)
+            //{
+            //    EELOMapEditorCore.GetInst().SelectBrushLocationLayer();
+            //}
+            //else if (curEvent.keyCode == KeyCode.R)
+            //{
+            //    EELOMapEditorCore.GetInst().SelectEraseLocationLayer();
+            //}
             else if (curEvent.keyCode == KeyCode.T)
             {
-                EELOMapEditorCore.GetInst().SelectBrushCollision();
+                EELOMapEditorCore.GetInst().SelectBrushCollisionLayer();
             }
             else if (curEvent.keyCode == KeyCode.Y)
             {
-                EELOMapEditorCore.GetInst().SelectEraseCollision();
+                EELOMapEditorCore.GetInst().SelectEraseCollisionLayer();
             }
             else if (curEvent.keyCode == KeyCode.U)
             {
-                EELOMapEditorCore.GetInst().SelectBrushTrigger();
+                EELOMapEditorCore.GetInst().SelectBrushTriggerLayer();
             }
             else if (curEvent.keyCode == KeyCode.I)
             {
-                EELOMapEditorCore.GetInst().SelectEraseTrigger();
+                EELOMapEditorCore.GetInst().SelectEraseTriggerLayer();
             }
             else if (curEvent.keyCode == KeyCode.O)
             {
-                EELOMapEditorCore.GetInst().SelectBrushHill();
+                EELOMapEditorCore.GetInst().SelectBrushHillLayer();
             }
             else if (curEvent.keyCode == KeyCode.P)
             {
-                EELOMapEditorCore.GetInst().SelectEraseHill();
+                EELOMapEditorCore.GetInst().SelectEraseHillLayer();
             }
         }
     }
@@ -179,21 +180,21 @@ public class EXSceneViewEvent : MonoBehaviour
 
             if(this != null)
             {            
-                GUILayout.Label("215 맵 에디터 [  ver 0.0.1 ]");
+                GUILayout.Label("215 맵 에디터 [  ver 2.0.0 ]");
                 if(_isWorkMode)
                 {
-                    if (GUILayout.Button("작업모드 ON", UKHMapUtility.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 13), GUILayout.Width(100), GUILayout.Height(30)))
+                    if (GUILayout.Button("작업모드 ON", UKH.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 13), GUILayout.Width(100), GUILayout.Height(30)))
                         _isWorkMode = _isWorkMode ? false : true;
                 }
                 else
                 {
-                    if (GUILayout.Button("작업모드 OFF", UKHMapUtility.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.red, 13), GUILayout.Width(100), GUILayout.Height(30)))
+                    if (GUILayout.Button("작업모드 OFF", UKH.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.red, 13), GUILayout.Width(100), GUILayout.Height(30)))
                         _isWorkMode = _isWorkMode ? false : true;
                 }
 
                 if (_isDebugMode)
                 {
-                    if (GUILayout.Button("디버그모드 ON", UKHMapUtility.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 13), GUILayout.Width(120), GUILayout.Height(30)))
+                    if (GUILayout.Button("디버그모드 ON", UKH.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 13), GUILayout.Width(120), GUILayout.Height(30)))
                     {
                         _isDebugMode = _isDebugMode ? false : true;
                         EELOMapEditorCore.GetInst().RenderDebugMode();
@@ -201,13 +202,13 @@ public class EXSceneViewEvent : MonoBehaviour
                 }
                 else
                 {
-                    if (GUILayout.Button("디버그모드 OFF", UKHMapUtility.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.red, 13), GUILayout.Width(120), GUILayout.Height(30)))
+                    if (GUILayout.Button("디버그모드 OFF", UKH.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.red, 13), GUILayout.Width(120), GUILayout.Height(30)))
                         _isDebugMode = _isDebugMode ? false : true;
                 }
 
                 if (_isShowCollision)
                 {
-                    if (GUILayout.Button("충돌체 ON", UKHMapUtility.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 13), GUILayout.Width(120), GUILayout.Height(30)))
+                    if (GUILayout.Button("충돌체 ON", UKH.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 13), GUILayout.Width(120), GUILayout.Height(30)))
                     {
                         _isShowCollision = _isShowCollision ? false : true;
                         EELOMapEditorCore.GetInst().RenderCollision(_isShowCollision);
@@ -215,7 +216,7 @@ public class EXSceneViewEvent : MonoBehaviour
                 }
                 else
                 {
-                    if (GUILayout.Button("충돌체 OFF", UKHMapUtility.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.red, 13), GUILayout.Width(120), GUILayout.Height(30)))
+                    if (GUILayout.Button("충돌체 OFF", UKH.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.red, 13), GUILayout.Width(120), GUILayout.Height(30)))
                     {
                         _isShowCollision = _isShowCollision ? false : true;
                         EELOMapEditorCore.GetInst().RenderCollision(_isShowCollision);
@@ -223,7 +224,7 @@ public class EXSceneViewEvent : MonoBehaviour
                 }
                 if (_isShowTrigger)
                 {
-                    if (GUILayout.Button("이벤트 ON", UKHMapUtility.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 13), GUILayout.Width(120), GUILayout.Height(30)))
+                    if (GUILayout.Button("이벤트 ON", UKH.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 13), GUILayout.Width(120), GUILayout.Height(30)))
                     {
                         _isShowTrigger = _isShowTrigger ? false : true;
                         EELOMapEditorCore.GetInst().RenderTrigger(_isShowTrigger);
@@ -231,7 +232,7 @@ public class EXSceneViewEvent : MonoBehaviour
                 }
                 else
                 {
-                    if (GUILayout.Button("이벤트 OFF", UKHMapUtility.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.red, 13), GUILayout.Width(120), GUILayout.Height(30)))
+                    if (GUILayout.Button("이벤트 OFF", UKH.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.red, 13), GUILayout.Width(120), GUILayout.Height(30)))
                     {
                         _isShowTrigger = _isShowTrigger ? false : true;
                         EELOMapEditorCore.GetInst().RenderTrigger(_isShowTrigger);
@@ -239,7 +240,7 @@ public class EXSceneViewEvent : MonoBehaviour
                 }
                 if (_isShowHill)
                 {
-                    if (GUILayout.Button("언덕 ON", UKHMapUtility.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 13), GUILayout.Width(120), GUILayout.Height(30)))
+                    if (GUILayout.Button("언덕 ON", UKH.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 13), GUILayout.Width(120), GUILayout.Height(30)))
                     {
                         _isShowHill = _isShowHill ? false : true;
                         EELOMapEditorCore.GetInst().RenderHill(_isShowHill);
@@ -247,18 +248,70 @@ public class EXSceneViewEvent : MonoBehaviour
                 }
                 else
                 {
-                    if (GUILayout.Button("언덕 OFF", UKHMapUtility.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.red, 13), GUILayout.Width(120), GUILayout.Height(30)))
+                    if (GUILayout.Button("언덕 OFF", UKH.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.red, 13), GUILayout.Width(120), GUILayout.Height(30)))
                     {
                         _isShowHill = _isShowHill ? false : true;
                         EELOMapEditorCore.GetInst().RenderHill(_isShowHill);
                     }
                 }
+
+                if (_isShowFloor[0])
+                {
+                    if (GUILayout.Button("B1층 ON", UKH.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 13), GUILayout.Width(120), GUILayout.Height(30)))
+                    {
+                        _isShowFloor[0] = _isShowFloor[0] ? false : true;
+                        EELOMapEditorCore.GetInst().RenderFloor(0, _isShowFloor[0]);
+                    }
+                }
+                else
+                {
+                    if (GUILayout.Button("B1층 OFF", UKH.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.red, 13), GUILayout.Width(120), GUILayout.Height(30)))
+                    {
+                        _isShowFloor[0] = _isShowFloor[0] ? false : true;
+                        EELOMapEditorCore.GetInst().RenderFloor(0, _isShowFloor[0]);
+                    }
+                }
+                if (_isShowFloor[1])
+                {
+                    if (GUILayout.Button("지상층 ON", UKH.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 13), GUILayout.Width(120), GUILayout.Height(30)))
+                    {
+                        _isShowFloor[1] = _isShowFloor[1] ? false : true;
+                        EELOMapEditorCore.GetInst().RenderFloor(1, _isShowFloor[1]);
+                    }
+                }
+                else
+                {
+                    if (GUILayout.Button("지상층 OFF", UKH.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.red, 13), GUILayout.Width(120), GUILayout.Height(30)))
+                    {
+                        _isShowFloor[1] = _isShowFloor[1] ? false : true;
+                        EELOMapEditorCore.GetInst().RenderFloor(1, _isShowFloor[1]);
+                    }
+                }
+                if (_isShowFloor[2])
+                {
+                    if (GUILayout.Button("2층 ON", UKH.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.green, 13), GUILayout.Width(120), GUILayout.Height(30)))
+                    {
+                        _isShowFloor[2] = _isShowFloor[2] ? false : true;
+                        EELOMapEditorCore.GetInst().RenderFloor(2, _isShowFloor[2]);
+                    }
+                }
+                else
+                {
+                    if (GUILayout.Button("2층 OFF", UKH.GUIStyleDefine.GetButtonStlye(TextAnchor.MiddleCenter, Color.red, 13), GUILayout.Width(120), GUILayout.Height(30)))
+                    {
+                        _isShowFloor[2] = _isShowFloor[2] ? false : true;
+                        EELOMapEditorCore.GetInst().RenderFloor(2, _isShowFloor[2]);
+                    }
+                }
             }
             if (_isWorkMode)
             {
-                if(Selection.activeGameObject != EELOMapEditorCore.GetInst()._tilemapInstance.gameObject)
-                    Selection.activeGameObject = EELOMapEditorCore.GetInst()._tilemapInstance.gameObject;
-
+                if(EELOMapEditorCore.GetInst()._tilemapFloor[1] != null)
+                {
+                    if (Selection.activeGameObject != EELOMapEditorCore.GetInst()._tilemapFloor[1].gameObject)
+                        Selection.activeGameObject = EELOMapEditorCore.GetInst()._tilemapFloor[1].gameObject;
+                }
+           
                 if(Tools.current != Tool.View)
                     Tools.current = Tool.View;
             }
