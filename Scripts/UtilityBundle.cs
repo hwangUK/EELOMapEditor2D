@@ -7,6 +7,111 @@ using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Tilemaps;
+using System.Runtime.Serialization;
+
+public enum ELocationTypeData
+{
+    forest,
+    deepSea,
+    magma,
+    dessert,
+    grandCanyon,
+    city,
+    frozen,
+    max
+}
+namespace UKH2
+{
+    public static class Serializator
+    {
+        private static BinaryFormatter _bin = new BinaryFormatter();
+
+        public static void Serialize(string pathOrFileName, object objToSerialise)
+        {
+            using (Stream stream = File.Open(pathOrFileName, FileMode.Create))
+            {
+                try
+                {
+                    _bin.Serialize(stream, objToSerialise);
+                }
+                catch (SerializationException e)
+                {
+                    Console.WriteLine("Failed to serialize. Reason: " + e.Message);
+                    throw;
+                }
+            }
+        }
+        public static List<UKH2.SerializableTileData[]> DeserializeT(string pathOrFileName)
+        {
+
+            if (File.Exists(pathOrFileName))
+            {
+                List<UKH2.SerializableTileData[]> MDB = new List<UKH2.SerializableTileData[]>();
+                BinaryFormatter bf = new BinaryFormatter();
+                FileStream file = File.Open(pathOrFileName, FileMode.Open);
+
+                MDB = (List<UKH2.SerializableTileData[]>)bf.Deserialize(file);
+                file.Close();
+                return MDB;
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        public static T Deserialize<T>(string pathOrFileName)
+        {
+            T items;
+
+            using (Stream stream = File.Open(pathOrFileName, FileMode.Open))
+            {
+                try
+                {
+                    items = (T)_bin.Deserialize(stream);
+                }
+                catch (SerializationException e)
+                {
+                    Console.WriteLine("Failed to deserialize. Reason: " + e.Message);
+                    throw;
+                }
+            }
+            return items;
+        }
+    }
+
+    [Serializable]
+    public class SerializableTilePresetNew
+    {
+        public int _guid;
+        public string _filename;
+        public string _textureName;
+        public bool _isUseAnim;
+        public List<string> _animTextureNameList;
+        public string _tileName;
+        public SpriteAlignment _pivotType;
+        public bool _isShaderAnim;
+        public int _shaderAnimIdx;
+        public SerializableTilePresetNew()
+        {
+            _animTextureNameList = new List<string>();
+        }
+    }
+
+    [Serializable]
+    public class SerializableTileData
+    {
+        public byte[] guid = new byte[3];
+        public byte isCollision;
+        public byte flagIndex;
+        public ushort monsterIndex;
+    }
+    [Serializable]
+    public class SerializableTileDataStr
+    {
+        public List<string[]> gridData = new List<string[]>();
+    }
+}
 
 namespace UKH
 {
@@ -30,16 +135,17 @@ namespace UKH
         public List<string>         _animTextureNameList;
         public string               _tileName;
         public SpriteAlignment      _pivotType;
-
+        public bool                 _isShaderAnim;
+        public int                  _shaderAnimIdx;
         public SerializableETilePresetData()
         {
             _animTextureNameList = new List<string>();
         }
     }
-
+ 
     public static class FileSystem 
     {
-        public static void CSVWrite(List<List<OCell>> mapData, string path, ETileLayerSaveType layerType)
+        public static void CSVWrite(List<List<FCellCash>> mapData, string path, ETileLayerSaveType layerType)
         {
             SerializableGridData MDB = new SerializableGridData();
             int sizeX = mapData.Count;
@@ -52,29 +158,29 @@ namespace UKH
                 {
                     if (layerType == ETileLayerSaveType.Floor)
                     {
-                        row[j] = mapData[i][j].GetInstanceGUID(0).ToString();
+                        row[j] = mapData[i][j].TileGUIDMemo[0].ToString();
                         row[j] += "#";
-                        row[j] += mapData[i][j].GetInstanceGUID(1).ToString();
+                        row[j] += mapData[i][j].TileGUIDMemo[1].ToString();
                         row[j] += "#";
-                        row[j] += mapData[i][j].GetInstanceGUID(2).ToString();
+                        row[j] += mapData[i][j].TileGUIDMemo[2].ToString();
 
                     }
-                    else if (layerType == ETileLayerSaveType.Location)
-                    {
-                        row[j] = mapData[i][j].GetLocationType().ToString();
-                    }
+                    //else if (layerType == ETileLayerSaveType.Location)
+                    //{
+                    //    row[j] = mapData[i][j].GetLocationMemo().ToString();
+                    //}
                     else if (layerType == ETileLayerSaveType.Collision)
                     {
-                        row[j] = mapData[i][j].GetIsCollision() ? "T" : "F";
+                        //row[j] = mapData[i][j].IsCollisionMemo ? 1 : 0;
                     }
-                    else if (layerType == ETileLayerSaveType.Event)
+                    else if (layerType == ETileLayerSaveType.Flag)
                     {
-                        row[j] = mapData[i][j].GetEventTriggerIDX().ToString();
+                        row[j] = mapData[i][j].FlagIdxMemo.ToString();
                     }
-                    else if (layerType == ETileLayerSaveType.Hill)
-                    {
-                        row[j] = mapData[i][j].GetIsHill() ? "T" : "F"; ;
-                    }
+                    //else if (layerType == ETileLayerSaveType.Hill)
+                    //{
+                    //    row[j] = mapData[i][j].GetIsHill() ? "T" : "F"; ;
+                    //}
                 }
                 MDB.gridData.Add(row);
             }
@@ -98,20 +204,15 @@ namespace UKH
             outStream.Close();           
         }
 
-        public static void BinaryWriteETilePreset()
-        {
-
-        }
         public static bool FileExistChecker(string path)
         {
-            if (File.Exists(path))
-               return true;
-            else
-                return false;
+            if (File.Exists(path))  return true;
+            else                    return false;
         }
-        public static bool BinaryWrite(List<List<OCell>> mapData, string path, ETileLayerSaveType layerType)
+
+        public static bool BinaryWrite(List<List<FCellCash>> mapData, string path)//, ETileLayerSaveType layerType)
         {
-            SerializableGridData MDB = new SerializableGridData();
+            SerializableGridData saveFile = new SerializableGridData();
             int sizeX = mapData.Count;
             int sizeY = mapData[0].Count;
             for (int i = 0; i < sizeX; i++)
@@ -119,34 +220,40 @@ namespace UKH
                 string[] row = new string[sizeY];
                 for (int j = 0; j < sizeY; j++)
                 {
-
-                    if (layerType == ETileLayerSaveType.Floor)
-                    {
-                        row[j] = mapData[i][j].GetInstanceGUID(0).ToString(); 
-                        row[j] += "#";
-                        row[j] += mapData[i][j].GetInstanceGUID(1).ToString();
-                        row[j] += "#";
-                        row[j] += mapData[i][j].GetInstanceGUID(2).ToString();
-
-                    }
-                    else if (layerType == ETileLayerSaveType.Location)
-                    {
-                        row[j] = mapData[i][j].GetLocationType().ToString();
-                    }
-                    else if (layerType == ETileLayerSaveType.Collision)
-                    {
-                        row[j] = mapData[i][j].GetIsCollision() ? "T" : "F";
-                    }
-                    else if (layerType == ETileLayerSaveType.Event)
-                    {
-                        row[j] = mapData[i][j].GetEventTriggerIDX().ToString();
-                    }
-                    else if (layerType == ETileLayerSaveType.Hill)
-                    {
-                        row[j] = mapData[i][j].GetIsHill() ? "T" : "F"; ;
-                    }
+                    //------------------
+                    row[j] = $"{mapData[i][j].TileGUIDMemo[0].ToString()}#{mapData[i][j].TileGUIDMemo[1].ToString()}#{mapData[i][j].TileGUIDMemo[2].ToString()}#";                   
+                    //row[j] += mapData[i][j].IsCollisionMemo ? "T" : "F";
+                    row[j] += "#";
+                    row[j] += mapData[i][j].FlagIdxMemo.ToString();
+                    row[j] += "#";
+                    row[j] += mapData[i][j].MonsterGUIDMemo;
+                    //------------------
+                    //if (layerType == ETileLayerSaveType.Floor)
+                    //{
+                    //    row[j] = mapData[i][j].GetInstanceGUIDMemo(0).ToString(); 
+                    //    row[j] += "#";
+                    //    row[j] += mapData[i][j].GetInstanceGUIDMemo(1).ToString();
+                    //    row[j] += "#";
+                    //    row[j] += mapData[i][j].GetInstanceGUIDMemo(2).ToString();
+                    //}
+                    //else if (layerType == ETileLayerSaveType.Location)
+                    //{
+                    //    row[j] = mapData[i][j].GetLocationMemo().ToString();
+                    //}
+                    //else if (layerType == ETileLayerSaveType.Collision)
+                    //{
+                    //    row[j] = mapData[i][j].GetIsCollision() ? "T" : "F";
+                    //}
+                    //else if (layerType == ETileLayerSaveType.Event)
+                    //{
+                    //    row[j] = mapData[i][j].GetEventIdx().ToString();
+                    //}
+                    //else if (layerType == ETileLayerSaveType.Hill)
+                    //{
+                    //    row[j] = mapData[i][j].GetIsHill() ? "T" : "F"; ;
+                    //}
                 }
-                MDB.gridData.Add(row);
+                saveFile.gridData.Add(row);
             }
             if (File.Exists(path))
             {
@@ -155,12 +262,12 @@ namespace UKH
             }
             BinaryFormatter bf = new BinaryFormatter();
             FileStream file = File.Create(path);
-            bf.Serialize(file, MDB);
+            bf.Serialize(file, saveFile);
             file.Close();
 
             return file != null;
         }
-
+       
         public static SerializableGridData BinaryRead(string path)
         {
             if(File.Exists(path))
@@ -193,6 +300,7 @@ namespace UKH
             }
             return result;
         }
+
         public static void WriteTextGUID(string path, int guid)
         {
             //DirectoryInfo directoryInfo = new DirectoryInfo(Path.GetDirectoryName(path));            
@@ -254,9 +362,9 @@ namespace UKH
             SerializableETilePresetData newData = new SerializableETilePresetData();
             
             newData._guidTOBJ       = data._guidTOBJ;
-            newData._locationType   = data._locationType;
+           // newData._locationType   = data._locationType;
             newData._filename       = data._filename;
-            newData._isLocation     = data._isLocation;
+            //newData._isLocation     = data._isLocation;
             newData._isUseAnim      = data._isUseAnim;
             newData._textureName    = data._texture.name;
             if (data._animTextureList != null)
@@ -268,10 +376,11 @@ namespace UKH
                 newData._animTextureNameList.Add(data._animTextureList[i].name);
 
             newData._tileName       = data._tile.name;
-            newData._isGathering    = data._isGatherEvent;
-            newData._gatheringIdx   = data._gatherEventIdx;
+            //newData._isGathering    = data._isGatherEvent;
+            //newData._gatheringIdx   = data._gatherEventIdx;
             newData._pivotType      = data._pivotAlignment;
-
+            newData._isShaderAnim   = data._isShaderAnim;
+            newData._shaderAnimIdx  = data._shaderAnimIdx;
             string jsonString = JsonUtility.ToJson(newData);
             string encryptString = Encrypt(jsonString);
 
@@ -318,9 +427,9 @@ namespace UKH
 
                     DBPresetTileSO returnOBJ = new DBPresetTileSO();
                     returnOBJ._guidTOBJ = data._guidTOBJ;
-                    returnOBJ._locationType = data._locationType;
+                    //returnOBJ._locationType = data._locationType;
                     returnOBJ._filename = data._filename;
-                    returnOBJ._isLocation = data._isLocation;
+                    //returnOBJ._isLocation = data._isLocation;
                     returnOBJ._isUseAnim = data._isUseAnim;
                     returnOBJ._texture = Resources.Load<Texture2D>("Bin/Sprites/" + data._textureName);
 
@@ -331,8 +440,10 @@ namespace UKH
                         returnOBJ._animTextureList.Add(Resources.Load<Texture2D>("Bin/Sprite/" + data._animTextureNameList[i]));
 
                     returnOBJ._tile = Resources.Load<Tile>("Bin/Tile/" + data._tileName);
-                    returnOBJ._isGatherEvent = data._isGathering;
-                    returnOBJ._gatherEventIdx = data._gatheringIdx;
+                    //returnOBJ._isGatherEvent = data._isGathering;
+                    //returnOBJ._gatherEventIdx = data._gatheringIdx;
+                    returnOBJ._isShaderAnim = data._isShaderAnim;
+                    returnOBJ._shaderAnimIdx = data._shaderAnimIdx;
 
                     returnData.Add(returnOBJ);
                 }
@@ -340,6 +451,7 @@ namespace UKH
             return returnData;
         }
     }
+
     public static class GenerateGameObject
     {
         public static GameObject GenerateTilemapFrame(Transform root)
@@ -413,10 +525,10 @@ namespace UKH
             gob.transform.SetParent(root.transform);
             return gob;
         }
-        public static GameObject GenerateTilemapEvent(Transform root)
+        public static GameObject GenerateTilemapFlag(Transform root)
         {
             GameObject gob = new GameObject();
-            gob.name = "TilemapEvent";
+            gob.name = "TilemapFlag";
             gob.transform.position = Vector3.zero;
             gob.AddComponent<Tilemap>();
             gob.GetComponent<Tilemap>().tileAnchor = new Vector3(0.5f, 0.5f, 0f);
@@ -434,10 +546,10 @@ namespace UKH
             gob.transform.SetParent(root.transform);
             return gob;
         }
-        public static GameObject GenerateTilemapHill(Transform root)
+        public static GameObject GenerateTilemapMonster(Transform root)
         {
             GameObject gob = new GameObject();
-            gob.name = "TilemapHill";
+            gob.name = "TilemapMonster";
             gob.transform.position = Vector3.zero;
             gob.AddComponent<Tilemap>();
             gob.GetComponent<Tilemap>().tileAnchor = new Vector3(0.5f, 0.5f, 0f);

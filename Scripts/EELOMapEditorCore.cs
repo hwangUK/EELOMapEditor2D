@@ -4,40 +4,44 @@ using UnityEngine;
 using UnityEngine.Tilemaps;
 using UnityEditor;
 using System;
+using System.IO;
 
 #if UNITY_EDITOR
+public enum EEntityType { normal, monster_gather, monster_normal, monster_boss, monster_hidden_boss }
 [ExecuteInEditMode]
 public class EELOMapEditorCore : MonoBehaviour
 {
+   // #region DEBUG
+   // public bool isNewLoader = true;
+   // #endregion
     static private EELOMapEditorCore instance = null;
 
-    //실제맵
+    [SerializeField]
+    private DBPresetSO          _preset;
     public Tilemap              _tilemapFrameArea;
-    public Tilemap[]              _tilemapFloor = new Tilemap[3];
+    public Tilemap[]            _tilemapFloor = new Tilemap[3];
     public Tilemap              _tilemapCollision;
-    public Tilemap              _tilemapEvent;
-    public Tilemap              _tilemapHill;
+    public Tilemap              _tilemapFlag;
+    public Tilemap              _tilemapMonster;
     public Tilemap              _tilemapDBG;
-
+    [Space(10)]
     public TileBase             _cashTileFrame          = null;
     public TileBase             _cashDBGSelectTile      = null;
-    public TileBase             _cashTileHill           = null;
-    public DBPresetTileSO       _cashBrushedSO      = null;
-    //public DBPresetTileSO       _cashLocBrushedSO       = null;
     public TileBase             _cashCollisionTile      = null;
-    public TileBase             _cashGatherEventTile          = null;
-    public TileBase             _cashCommonEventTile    = null;
+    public TileBase             _cashMonsterTile   = null;
+    public TileBase             _cashFlagTile    = null;
 
-    public List<List<OCell>>    worldMap;
-    public bool                 isGenerateWorld = false;
+    public List<List<FCellCash>> worldMap;
     public Vector2Int           worldSize;
-    //디비 프리셋
-    public Dictionary<int, DBPresetTileSO>                  TablePresetTile = new Dictionary<int /*guidOBJ*/, DBPresetTileSO>();
-    //public Dictionary<ELocationTypeData, DBPresetTileOBJ>    TableLocTile = new Dictionary<ELocationTypeData /*guidOBJ*/, DBPresetTileOBJ>();
+    public PresetDataTile       _cashBrushTile = null;
+    public bool                 isGenerateWorld = false;
 
-
-    //에디터조작
-    private EXSceneViewEvent    _sceneViewEvents;
+    public string                           pathSave;   
+    public PresetDataTile                   CashTile    = null;
+    public SerializePresetDataMonster       CashMonster = null;
+    public List<Vector2Int>                 CashMonsterList = new List<Vector2Int>();
+    public int                              CashFlagIdx = 0;
+    private Vector3Int                      _cashSelectedPos;
 
     public int                  _floor = 1;
     public bool                 isPressDrawKey      = false;
@@ -49,28 +53,33 @@ public class EELOMapEditorCore : MonoBehaviour
     public int                  brushSize           = 1;            //붓크기
     public Vector2              scrollDelta         = Vector2.zero;      //보정 스크롤 값
 
-    private Vector3Int          _cashSelectedPos;
-    public int                  cashWorldEventTriggerIdx      = -1;
-    public ELocationTypeData        cashLocationType    =  ELocationTypeData.max;
-
-    public string               mapDatafilePath;
+    public string[]             floorOptions = new string[] { "[A] B1 층", "[S] 지상층", "[D] 2층" };
+    public int                  floorSelected = 1;
+   
+    //에디터조작
     public EXSceneViewEvent     GetEvents() { return _tilemapFloor[1].GetComponent<EXSceneViewEvent>(); }
 
-    public static EELOMapEditorCore GetInst()
+    public static EELOMapEditorCore Instance
     {
-        if (instance == null)
+        get
         {
-            instance = (EELOMapEditorCore)FindObjectOfType(typeof(EELOMapEditorCore));
+            if (instance == null)
+            {
+                instance = (EELOMapEditorCore)FindObjectOfType(typeof(EELOMapEditorCore));
+            }
+            return instance;
         }
-        return instance;
     }
-      
-
-    /// <summary>
-    /// 맵 생성 관련
-    /// </summary>
-    /// <param name="worldSizeX"></param>
-    /// <param name="worldSizeY"></param>
+    public void ReCreateTileAssetObject(int sizeX, int sizeY)
+    {
+        if (worldMap == null)
+            GenerateWorldMap(sizeX, sizeY);
+        else
+        {
+            ReMakeGameObject();
+            GenerateWorldMap(sizeX, sizeY);
+        }
+    }
     public void GenerateWorldMap(int worldSizeX, int worldSizeY)
     {
         if(worldMap != null)
@@ -89,18 +98,17 @@ public class EELOMapEditorCore : MonoBehaviour
                     _tilemapFloor[1].SetTile(cellpos, null);
                     _tilemapFloor[2].SetTile(cellpos, null);
                     _tilemapCollision.SetTile(cellpos, null);
-                    _tilemapEvent.SetTile(cellpos, null);
-                    _tilemapHill.SetTile(cellpos, null);
+                    _tilemapFlag.SetTile(cellpos, null);
                 }
             }
         }
 
         worldSize   = new Vector2Int(worldSizeX, worldSizeY);
-        worldMap    = new List<List<OCell>>();// OCell[worldSize.x, worldSize.y];
+        worldMap    = new List<List<FCellCash>>();
 
         for (int i = 0; i < worldSize.x; i++)
         {
-            List<OCell> row = new List<OCell>();
+            List<FCellCash> row = new List<FCellCash>();
             worldMap.Add(row);
 
             for (int j = 0; j < worldSize.y; j++)
@@ -111,17 +119,16 @@ public class EELOMapEditorCore : MonoBehaviour
                         0f);
                 try
                 {
-                    OCell oCell = new OCell();
-                    oCell.FCell.SavePosition(i, j, pos);
+                    FCellCash FCellCash = new FCellCash();
+                    FCellCash.WorldPos = pos;
+                    FCellCash.GridPos.x = i;
+                    FCellCash.GridPos.y = j;
 
-                    worldMap[i].Add(oCell);
+                    worldMap[i].Add(FCellCash);
 
                     //프레임 칠하기
                     Vector3Int cellpos = _tilemapFrameArea.WorldToCell(pos);
                     _tilemapFrameArea.SetTile(cellpos, _cashTileFrame);
-
-                    //이거안해도 될거같네?
-                    //worldMap[i,j].PTile = baseTilemap.GetTile(cellpos);
                 }
                 catch
                 {
@@ -131,209 +138,8 @@ public class EELOMapEditorCore : MonoBehaviour
         }
         isGenerateWorld = true;
     }
-    public void ReCreateTileAssetObject(int sizeX, int sizeY)
-    {
-        if (worldMap == null)
-            GenerateWorldMap(sizeX, sizeY);
-        else
-            ResizeWorldMap(sizeX, sizeY);
-    }
-    public void LoadBrushedWorldMap(UKH.SerializableGridData binaryData, ETileLayerSaveType layerType)
-    {
-        if (binaryData.gridData != null)
-        {
-            int sizeX = binaryData.gridData.Count;
-            int sizeY = binaryData.gridData[0].Length;
 
-            //브러쉬 에이전트 
-            if (sizeX > 0 && sizeY > 0)
-            {
-                for (int i = 0; i < sizeX; i++)
-                {
-                    for (int j = 0; j < sizeY; j++)
-                    {
-                        Vector3 pos = new Vector3(
-                                (i * 0.5f) - (j * 0.5f),
-                                (i * 0.25f) + (j * 0.25f),
-                                0f);
-                        try
-                        {
-                            if(layerType == ETileLayerSaveType.Floor)
-                            {
-                                //worldMap[i, j].FCell.Set성격();
-                                string[] guids = binaryData.gridData[i][j].Split("#");
-                                int[] floorGUID = new int[3];
-                                floorGUID[0] = Int32.Parse(guids[0]);
-                                floorGUID[1] = Int32.Parse(guids[1]);
-                                floorGUID[2] = Int32.Parse(guids[2]);
-
-                                for (int k = 0; k < floorGUID.Length; k++)
-                                {
-                                    if (TablePresetTile.ContainsKey(floorGUID[k]))
-                                    {
-                                        Vector3Int cellpos = _tilemapFloor[k].WorldToCell(pos);
-                                        _tilemapFloor[k].SetTile(cellpos, TablePresetTile[floorGUID[k]]._tile);
-
-                                        worldMap[i][j].SetInstanceGUID(k, floorGUID[k]);
-
-                                        if(TablePresetTile[floorGUID[k]]._isGatherEvent)
-                                        {
-                                            _tilemapEvent.SetTile(cellpos, _cashGatherEventTile);
-                                            worldMap[i][j].SetEventEventIdx(TablePresetTile[floorGUID[k]]._gatherEventIdx);
-                                        }
-                                    }
-                                }
-                                //     //LINK
-                                //if (TablePresetTile[guid]._isLocation)
-                                // {
-                                //     Vector3Int cellpos = _tilemapFloorB1.WorldToCell(pos);
-                                //     _tilemapFloorB1.SetTile(cellpos, TablePresetTile[guid]._tile);
-                                // }
-                                // else
-                                // {
-                                //     for(int k = 0; k < floorGUI.Length; k++)
-                                //     {
-                                //         worldMap[i][j].SetInstanceGUID(k , guid);
-                                //     }
-
-                                //     Vector3Int cellpos = _tilemapFloor.WorldToCell(pos);
-                                //     _tilemapFloor.SetTile(cellpos, TablePresetTile[guid]._tile);
-                                // }
-                                //이거안해도 될거같네?
-                                //worldMap[i][j].PTile = baseTilemap.GetTile(cellpos);
-                                //worldMap[i][j].PTile = baseTilemap.GetTile(cellpos);
-                            }
-                            else if(layerType == ETileLayerSaveType.Location)
-                            {
-                                string location = binaryData.gridData[i][j];
-                                ELocationTypeData type = ELocationTypeData.max;
-                                if (location == "forest")
-                                    type = ELocationTypeData.forest;
-                                else if (location == "deepSea")
-                                    type = ELocationTypeData.deepSea;
-                                else if (location == "magma")
-                                    type = ELocationTypeData.magma;
-                                else if (location == "dessert")
-                                    type = ELocationTypeData.dessert;
-                                else if (location == "grandCanyon")
-                                    type = ELocationTypeData.grandCanyon;
-                                else if (location == "city")
-                                    type = ELocationTypeData.city;
-                                else if (location == "frozen")
-                                    type = ELocationTypeData.frozen;
-
-                                worldMap[i][j].SetLocationType(type);
-                            }
-                            //else if (layerType == ETileLayerType.FloorB1)
-                            //{
-                            //    string location = binaryData.gridData[i][j];
-                            //    ELocationTypeData type = ELocationTypeData.max;
-                            //    if (location == "forest")
-                            //        type = ELocationTypeData.forest;
-                            //    else if (location == "deepSea")
-                            //        type = ELocationTypeData.deepSea;
-                            //    else if (location == "magma")
-                            //        type = ELocationTypeData.magma;
-                            //    else if (location == "dessert")
-                            //        type = ELocationTypeData.dessert;
-                            //    else if (location == "grandCanyon")
-                            //        type = ELocationTypeData.grandCanyon;
-                            //    else if (location == "city")
-                            //        type = ELocationTypeData.city;
-                            //    else if (location == "frozen")
-                            //        type = ELocationTypeData.frozen;
-
-                            //    worldMap[i][j].SetLocationType(type);
-
-                            //    //if (type != ELocationTypeData.max)
-                            //    //{
-                            //    //    if(TablePresetTile.ContainsKey(type))
-                            //    //    {
-                            //    //        DBPresetTileSO tileInfo = TableLocTile[type];
-                            //    //        Vector3Int cellpos = _tilemapLocationBase.WorldToCell(pos);
-                            //    //        _tilemapLocationBase.SetTile(cellpos, tileInfo._tile);
-                            //    //    }
-                            //    //    else
-                            //    //    {
-                            //    //        Debug.LogError("Table에 Loc Tile정보없음");
-                            //    //    }
-                            //    //}
-                            //}
-                            else if (layerType == ETileLayerSaveType.Collision)
-                            {
-                                string isCollision = binaryData.gridData[i][j];
-                                worldMap[i][j].SetIsCollision(isCollision == "T" ? true : false);
-
-                                //그리기
-                                if(isCollision == "T")
-                                {
-                                    Vector3Int cellpos = _tilemapCollision.WorldToCell(pos);
-                                    _tilemapCollision.SetTile(cellpos, _cashCollisionTile);
-                                }
-                            }
-                            else if (layerType == ETileLayerSaveType.Event)
-                            {
-                                int eventIdx = Int32.Parse(binaryData.gridData[i][j]);
-                                worldMap[i][j].SetEventEventIdx(eventIdx);
-                                
-                                if(eventIdx < 1000 && eventIdx > -1)
-                                {
-                                    // 이벤트 타일이군
-                                    if (_cashCommonEventTile != null)
-                                    {
-                                        Vector3Int cellpos = _tilemapEvent.WorldToCell(pos);
-                                        _tilemapEvent.SetTile(cellpos, _cashCommonEventTile);
-                                    }
-                                    else
-                                    {
-                                        Debug.LogError($"_cashTriggerTileSet == null");
-                                    }
-                                }
-                                //else
-                                //{   
-                                //    // 채집 타일이군
-                                //    if (_cashTriggerTileSet != null)
-                                //    {
-                                //        if (_cashTriggerTileSet.Count > eventIdx)
-                                //        {
-                                //            Vector3Int cellpos = _tilemapEvent.WorldToCell(pos);
-                                //            _tilemapEvent.SetTile(cellpos, _cashTriggerTileSet[eventIdx]);
-                                //        }
-                                //        else
-                                //        {
-                                //            Debug.LogError($"triggerIdx 가 인덱스를 넘어섬");
-                                //        }
-                                //    }
-                                //    else
-                                //    {
-                                //        Debug.LogError($"_cashTriggerTileSet == null");
-                                //    }
-                                //}
-                            }
-                            else if (layerType == ETileLayerSaveType.Hill)
-                            {
-                                string isHill = binaryData.gridData[i][j];
-                                worldMap[i][j].SetIsHill(isHill == "T" ? true : false);
-
-                                //그리기
-                                if (isHill == "T")
-                                {
-                                    Vector3Int cellpos = _tilemapHill.WorldToCell(pos);
-                                    _tilemapHill.SetTile(cellpos, _cashTileHill);
-                                }
-                            }
-                        }
-                        catch
-                        {
-                            //Debug.LogError($"{i},{j} 예외발생");
-                        }
-                    }
-                }
-            }
-        }      
-    }
-
-    public void ResizeWorldMap(int worldSizeX, int worldSizeY)
+    public void ReMakeGameObject()
     {
         this.DeleteTilemapFrame();
         //his.DeleteTilemapLocation();
@@ -341,8 +147,8 @@ public class EELOMapEditorCore : MonoBehaviour
         this.DeleteTilemapInstance(1);
         this.DeleteTilemapInstance(2);
         this.DeleteTilemapCollision();
-        this.DeleteTilemapTrigger();
-        this.DeleteTilemapHill();
+        this.DeleteTilemapFlag();
+        //this.DeleteTilemapHill();
 
         this.CreateTilemapFrame();
         //this.CreateTilemapLocation();
@@ -350,76 +156,78 @@ public class EELOMapEditorCore : MonoBehaviour
         this.CreateTilemapFloor(1);
         this.CreateTilemapFloor(2);
         this.CreateTilemapCollision();
-        this.CreateTilemapTrigger();
-        this.CreateTilemapHill();
+        this.CreateTilemapFlag();
+        this.CreateTilemapMonster();
+        //this.CreateTilemapHill();
 
-        int prevSixeX = worldMap.Count;
-        int prevSixeY = worldMap[0].Count;
+        //int prevSixeX = worldMap.Count;
+        //int prevSixeY = worldMap[0].Count;
 
         // X ======================================
-        if (prevSixeX < worldSizeX)   //맵이더커졌다
-        {
-            int addCount = worldSizeX - prevSixeX;
-            for(int i = 0; i < addCount; i++)
-                worldMap.Add(new List<OCell>());
-        }
-        else if(prevSixeX > worldSizeX) // 더 작아짐
-        {
-            int oddCount = prevSixeX - worldSizeX;
-            for (int i = 0; i < oddCount; i++)
-                worldMap.RemoveAt(prevSixeX - 1 - i);
-        }
-      
-        // Y ======================================
-        if (prevSixeY < worldSizeY)   //맵이더커졌다
-        {
-            int addCount = worldSizeY - prevSixeY;
-            for(int i=0; i< worldMap.Count;i++)
-            {
-                for (int j = 0; j < addCount; j++)
-                {
-                    worldMap[i].Add(new OCell());
-                }
-            }
-        }
-        else if (prevSixeY > worldSizeY) // 더 작아짐
-        {
-            int oddCount = prevSixeY - worldSizeY;
-            for (int i = 0; i < worldMap.Count; i++)
-            {
-                for (int j = 0; j < oddCount; j++)
-                {
-                    worldMap[i].RemoveAt(prevSixeY - 1 - j);
-                }
-            }
-        }     
+        //if (prevSixeX < worldSizeX)   //맵이더커졌다
+        //{
+        //    int addCount = worldSizeX - prevSixeX;
+        //    for (int i = 0; i < addCount; i++)
+        //        worldMap.Add(new List<FCellCash>());
+        //}
+        //else if (prevSixeX > worldSizeX) // 더 작아짐
+        //{
+        //    int oddCount = prevSixeX - worldSizeX;
+        //    for (int i = 0; i < oddCount; i++)
+        //        worldMap.RemoveAt(prevSixeX - 1 - i);
+        //}
+        //
+        //// Y ======================================
+        //if (prevSixeY < worldSizeY)   //맵이더커졌다
+        //{
+        //    int addCount = worldSizeY - prevSixeY;
+        //    for (int i = 0; i < worldMap.Count; i++)
+        //    {
+        //        for (int j = 0; j < addCount; j++)
+        //        {
+        //            worldMap[i].Add(new FCellCash());
+        //        }
+        //    }
+        //}
+        //else if (prevSixeY > worldSizeY) // 더 작아짐
+        //{
+        //    int oddCount = prevSixeY - worldSizeY;
+        //    for (int i = 0; i < worldMap.Count; i++)
+        //    {
+        //        for (int j = 0; j < oddCount; j++)
+        //        {
+        //            worldMap[i].RemoveAt(prevSixeY - 1 - j);
+        //        }
+        //    }
+        //}
 
-        for(int i = 0;i < worldMap.Count;i++)
-        {
-            for(int j = 0; j < worldMap[i].Count;j++)
-            {
-                Vector3 pos = new Vector3(
-                                  (i * 0.5f) - (j * 0.5f),
-                                  (i * 0.25f) + (j * 0.25f),
-                                  0f);
-                //프레임 칠하기
-                Vector3Int cellpos = _tilemapFrameArea.WorldToCell(pos);
-                _tilemapFrameArea.SetTile(cellpos, _cashTileFrame);
-            }
-        }
+        //for (int i = 0; i < worldSizeX; i++)
+        //{
+        //    for (int j = 0; j < worldMap[i].Count; j++)
+        //    {
+        //        Vector3 pos = new Vector3(
+        //                          (i * 0.5f) - (j * 0.5f),
+        //                          (i * 0.25f) + (j * 0.25f),
+        //                          0f);
+        //        //프레임 칠하기
+        //        Vector3Int cellpos = _tilemapFrameArea.WorldToCell(pos);
+        //        _tilemapFrameArea.SetTile(cellpos, _cashTileFrame);
+        //    }
+        //}
     }
 
+    #region CREATE GAMEOBJECT
     public void LinkFrameTilemaps(GameObject frameMap)
     {
         _tilemapFrameArea = frameMap.GetComponent<Tilemap>();
     }
-    //public void LinkLocationTilemaps(GameObject lcationBaseMap)
-    //{
-    //    _tilemapFloorB1 = lcationBaseMap.GetComponent<Tilemap>();
-    //}
     public void LinkInstanceTilemaps(int floor, GameObject instanceMap)
     {
         _tilemapFloor[floor] = instanceMap.GetComponent<Tilemap>();
+    }
+    public void LinkMonsterTilemaps(GameObject instanceMap)
+    {
+        _tilemapMonster = instanceMap.GetComponent<Tilemap>();
     }
     public void LinkCollisionTilemaps(GameObject instanceMap)
     {
@@ -427,13 +235,8 @@ public class EELOMapEditorCore : MonoBehaviour
     }
     public void LinkEventTilemaps(GameObject instanceMap)
     {
-        _tilemapEvent = instanceMap.GetComponent<Tilemap>();
+        _tilemapFlag = instanceMap.GetComponent<Tilemap>();
     }
-    public void LinkHillTilemaps(GameObject src)
-    {
-        _tilemapHill = src.GetComponent<Tilemap>();
-    }
-    
     public void LinkDebugTilemaps(GameObject src)
     {
         _tilemapDBG = src.GetComponent<Tilemap>();
@@ -443,7 +246,7 @@ public class EELOMapEditorCore : MonoBehaviour
     {
         if (this._tilemapFloor[floor] == null)
         {
-            GameObject newTM = UKH.GenerateGameObject.GenerateTilemapFloor(floor,EELOMapEditorCore.GetInst().transform.Find("Grid").transform);
+            GameObject newTM = UKH.GenerateGameObject.GenerateTilemapFloor(floor,EELOMapEditorCore.Instance.transform.Find("Grid").transform);
             this.LinkInstanceTilemaps(floor,newTM);
         }
     }
@@ -451,51 +254,34 @@ public class EELOMapEditorCore : MonoBehaviour
     {
         if (this._tilemapFrameArea == null)
         {
-            GameObject newTM = UKH.GenerateGameObject.GenerateTilemapFrame(EELOMapEditorCore.GetInst().transform.Find("Grid").transform);
+            GameObject newTM = UKH.GenerateGameObject.GenerateTilemapFrame(EELOMapEditorCore.Instance.transform.Find("Grid").transform);
             this.LinkFrameTilemaps(newTM);
         }
     }
-    //public void CreateTilemapLocation()
-    //{
-    //    if (this._tilemapFloorB1 == null)
-    //    {
-    //        GameObject newTM = UKHMapUtility.GenerateGameObject.GenerateTilemapFloorB1(EELOMapEditorCore.GetInst().transform.Find("Grid").transform);
-    //        this.LinkLocationTilemaps(newTM);
-    //    }
-    //}
     public void CreateTilemapCollision()
     {
         if (this._tilemapCollision == null)
         {
-            GameObject newTM = UKH.GenerateGameObject.GenerateTilemapCollision(EELOMapEditorCore.GetInst().transform.Find("Grid").transform);
+            GameObject newTM = UKH.GenerateGameObject.GenerateTilemapCollision(EELOMapEditorCore.Instance.transform.Find("Grid").transform);
             this.LinkCollisionTilemaps(newTM);
         }
     }
-    public void CreateTilemapTrigger()
+    public void CreateTilemapFlag()
     {
-        if (this._tilemapEvent == null)
+        if (this._tilemapFlag == null)
         {
-            GameObject newTM = UKH.GenerateGameObject.GenerateTilemapEvent(EELOMapEditorCore.GetInst().transform.Find("Grid").transform);
+            GameObject newTM = UKH.GenerateGameObject.GenerateTilemapFlag(EELOMapEditorCore.Instance.transform.Find("Grid").transform);
             this.LinkEventTilemaps(newTM);
         }
     }
-    public void CreateTilemapHill()
+    public void CreateTilemapMonster()
     {
-        if (this._tilemapHill == null)
+        if (this._tilemapFlag == null)
         {
-            GameObject newTM = UKH.GenerateGameObject.GenerateTilemapHill(EELOMapEditorCore.GetInst().transform.Find("Grid").transform);
-            this.LinkHillTilemaps(newTM);
+            GameObject newTM = UKH.GenerateGameObject.GenerateTilemapFlag(EELOMapEditorCore.Instance.transform.Find("Grid").transform);
+            this.LinkEventTilemaps(newTM);
         }
     }
-
-    //public void DeleteTilemapLocation()
-    //{
-    //    if (this._tilemapFloorB1)
-    //    {
-    //        DestroyImmediate(this._tilemapFloorB1.gameObject);
-    //        this._tilemapFloorB1 = null;
-    //    }
-    //}
     public void DeleteTilemapInstance(int floor)
     {
         if (this._tilemapFloor[floor])
@@ -520,72 +306,38 @@ public class EELOMapEditorCore : MonoBehaviour
             this._tilemapCollision = null;
         }
     }
-    public void DeleteTilemapTrigger()
+    public void DeleteTilemapFlag()
     {
-        if (this._tilemapEvent)
+        if (this._tilemapFlag)
         {
-            DestroyImmediate(this._tilemapEvent.gameObject);
-            this._tilemapEvent = null;
+            DestroyImmediate(this._tilemapFlag.gameObject);
+            this._tilemapFlag = null;
         }
     }
-
-    public void DeleteTilemapHill()
+    public void DeleteTilemapMonster()
     {
-        if (this._tilemapHill)
+        if (this._tilemapMonster)
         {
-            DestroyImmediate(this._tilemapHill.gameObject);
-            this._tilemapHill = null;
+            DestroyImmediate(this._tilemapMonster.gameObject);
+            this._tilemapFlag = null;
         }
     }
+    #endregion
 
-    /// <summary>
-    /// /////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////
     /// 그리기 관련
-    /// </summary>
-    private bool _isSelected_brush_inst      = false;
-   // private bool _isSelected_brush_location  = false;
-    private bool _isSelected_brush_collision = false;
-    private bool _isSelected_brush_trigger   = false;
-    private bool _isSelected_brush_hill      = false;
+    public bool IsSelected_brush_tile         = false;
+    public bool IsSelected_brush_collision    = false;
+    public bool IsSelected_brush_flag         = false;
+    public bool IsSelected_brush_monster      = false;
 
-    private bool _isSelected_paint           = false;
+    public bool IsSelected_erase_tile         = false;
+    public bool IsSelected_erase_collision    = false;
+    public bool IsSelected_erase_flag         = false;
+    public bool IsSelected_erase_monster      = false;
 
-    private bool _isSelected_erase_inst      = false;
-   // private bool _isSelected_erase_location  = false;
-    private bool _isSelected_erase_collision = false;
-    private bool _isSelected_erase_trigger   = false;
-    private bool _isSelected_erase_hill      = false;
-
-    public bool IsSelected_brush_inst       { get => _isSelected_brush_inst; set => _isSelected_brush_inst = value; }
-   // public bool IsSelected_brush_location   { get => _isSelected_brush_location; set => _isSelected_brush_location = value; }
-    public bool IsSelected_brush_collision  { get => _isSelected_brush_collision; set => _isSelected_brush_collision = value; }
-    public bool IsSelected_brush_trigger    { get => _isSelected_brush_trigger; set => _isSelected_brush_trigger = value; }
-
-    public bool IsSelected_paint            { get => _isSelected_paint; set => _isSelected_paint = value; }
-
-    public bool IsSelected_erase_inst       { get => _isSelected_erase_inst; set => _isSelected_erase_inst = value; }
-    //public bool IsSelected_erase_location   { get => _isSelected_erase_location; set => _isSelected_erase_location = value; }
-    public bool IsSelected_erase_collision  { get => _isSelected_erase_collision; set => _isSelected_erase_collision = value; }
-    public bool IsSelected_erase_trigger    { get => _isSelected_erase_trigger; set => _isSelected_erase_trigger = value; }
-    public bool IsSelected_brush_hill       { get => _isSelected_brush_hill; set => _isSelected_brush_hill = value; }
-    public bool IsSelected_erase_hill       { get => _isSelected_erase_hill; set => _isSelected_erase_hill = value; }
-
-    //public ETileLayerType GetCurrentSelectedLayer()
-    //{
-    //    if (_isSelected_brush_inst || _isSelected_erase_inst)
-    //        return ETileLayerType.Instance;
-    //    else if (_isSelected_brush_location || _isSelected_erase_location)
-    //        return ETileLayerType.Location;
-    //    else if (_isSelected_brush_collision || _isSelected_erase_collision)
-    //        return ETileLayerType.Collision;
-    //    else if (_isSelected_brush_trigger || _isSelected_erase_trigger)
-    //        return ETileLayerType.Trigger;
-    //    else if (_isSelected_brush_hill || _isSelected_erase_hill)
-    //        return ETileLayerType.Hill;
-    //    else
-    //        return ETileLayerType.Instance;
-    //}
-    public OCell GetCurrentSelectedTileInfo()
+    public DBPresetSO Preset { get => _preset; set => _preset = value; }
+    public FCellCash GetCurrentSelectedTileCash()
     {
         if (worldMap != null)
         {
@@ -597,176 +349,109 @@ public class EELOMapEditorCore : MonoBehaviour
             return null;
         }
     }
-    // // BRUSH
-    public void SelectBrushInstLayer()
+
+    #region SELECT BRUSH
+    // BRUSH
+    public void SelectBrushTileLayer()
     {
-        _isSelected_brush_inst = true;
+        IsSelected_brush_tile       = true;
+        IsSelected_brush_monster    = false;
+        IsSelected_brush_collision  = false;
+        IsSelected_brush_flag       = false;
 
-        _isSelected_erase_inst      = false;
-        _isSelected_paint           = false;
-        //_isSelected_brush_location  = false;
-        //_isSelected_erase_location  = false;
-        _isSelected_brush_collision = false;
-        _isSelected_brush_trigger   = false;
-        _isSelected_erase_collision = false;
-        _isSelected_erase_trigger   = false;
-
-        _isSelected_brush_hill = false;
-        _isSelected_erase_hill = false;
+        IsSelected_erase_tile       = false;
+        IsSelected_erase_monster    = false;
+        IsSelected_erase_collision  = false;
+        IsSelected_erase_flag       = false;
     }
-    //public void SelectBrushLocationLayer()
-    //{
-    //    _isSelected_brush_location = true;
-    //
-    //    _isSelected_erase_location  = false;
-    //    _isSelected_brush_inst      = false;
-    //    _isSelected_erase_inst      = false;
-    //    _isSelected_paint           = false;
-    //    _isSelected_brush_collision = false;
-    //    _isSelected_brush_trigger   = false;
-    //    _isSelected_erase_collision = false;
-    //    _isSelected_erase_trigger   = false; 
-    //    _isSelected_brush_hill = false;
-    //    _isSelected_erase_hill = false;
-    //}
+    public void SelectBrushMonsterLayer()
+    {
+        IsSelected_brush_monster    = true;
+        IsSelected_brush_tile       = false;
+        IsSelected_brush_collision  = false;
+        IsSelected_brush_flag       = false;
+
+        IsSelected_erase_tile       = false;
+        IsSelected_erase_monster    = false;
+        IsSelected_erase_collision  = false;
+        IsSelected_erase_flag       = false;
+    }
     public void SelectBrushCollisionLayer()
     {
-        _isSelected_brush_collision = true;
+        IsSelected_brush_flag       = false;
+        IsSelected_brush_collision  = true;
+        IsSelected_brush_tile       = false;
+        IsSelected_brush_monster    = false;
 
-       // _isSelected_erase_location  = false;
-        _isSelected_brush_inst      = false;
-        _isSelected_erase_inst      = false;
-        _isSelected_paint           = false;
-       // _isSelected_brush_location  = false;
-        _isSelected_brush_trigger   = false;
-        _isSelected_erase_collision = false;
-        _isSelected_erase_trigger   = false;
-        _isSelected_brush_hill = false;
-        _isSelected_erase_hill = false;
+        IsSelected_erase_tile       = false;
+        IsSelected_erase_collision  = false;
+        IsSelected_erase_flag       = false; 
+        IsSelected_erase_monster    = false;
     }
-    public void SelectBrushTriggerLayer()
+    public void SelectBrushFlagLayer()
     {
-        _isSelected_brush_trigger = true;
+        IsSelected_brush_flag       = true;
+        IsSelected_brush_tile       = false;
+        IsSelected_brush_monster    = false;
+        IsSelected_brush_collision  = false;
 
-       // _isSelected_erase_location  = false;
-        _isSelected_brush_inst      = false;
-        _isSelected_erase_inst      = false;
-        _isSelected_paint           = false;
-        _isSelected_brush_collision = false;
-       // _isSelected_brush_location  = false;
-        _isSelected_erase_collision = false;
-        _isSelected_erase_trigger   = false;
-        _isSelected_brush_hill = false;
-        _isSelected_erase_hill = false;
-    }
-    public void SelectBrushHillLayer()
-    {
-        _isSelected_brush_hill = true;
-
-        _isSelected_erase_hill = false;
-        _isSelected_brush_inst = false;
-        _isSelected_erase_inst = false;
-        _isSelected_paint = false;
-        //_isSelected_brush_location = false;
-       // _isSelected_erase_location = false;
-        _isSelected_brush_collision = false;
-        _isSelected_brush_trigger = false;
-        _isSelected_erase_collision = false;
-        _isSelected_erase_trigger = false;
-    }
+        IsSelected_erase_flag       = false;
+        IsSelected_erase_tile       = false;
+        IsSelected_erase_collision  = false;
+        IsSelected_erase_monster    = false;
+    }   
     // // ERASE
-    public void SelectEraseInstLayer()
+    public void SelectEraseTile()
     {
-        _isSelected_erase_inst = true;
+        IsSelected_brush_flag       = false;
+        IsSelected_brush_tile       = false;
+        IsSelected_brush_monster    = false;
+        IsSelected_brush_collision  = false;
 
-        _isSelected_paint           = false;
-        _isSelected_brush_inst      = false; 
-        //_isSelected_brush_location  = false;
-        //_isSelected_erase_location  = false;
-        _isSelected_brush_collision = false;
-        _isSelected_brush_trigger   = false;
-        _isSelected_erase_collision = false;
-        _isSelected_erase_trigger   = false;
-        _isSelected_brush_hill = false;
-        _isSelected_erase_hill = false;
+        IsSelected_erase_flag       = false;
+        IsSelected_erase_tile       = true;
+        IsSelected_erase_collision  = false;
+        IsSelected_erase_monster    = false;
     }
-    //public void SelectEraseLocationLayer()
-    //{
-    //    _isSelected_erase_location = true;
-    //
-    //    _isSelected_brush_location  = false;
-    //    _isSelected_erase_inst      = false;
-    //    _isSelected_paint           = false;
-    //    _isSelected_brush_inst      = false;
-    //    _isSelected_brush_collision = false;
-    //    _isSelected_brush_trigger   = false;
-    //    _isSelected_erase_collision = false;
-    //    _isSelected_erase_trigger   = false;
-    //    _isSelected_brush_hill = false;
-    //    _isSelected_erase_hill = false;
-    //}
-    public void SelectEraseCollisionLayer()
+    public void SelectEraseCollision()
     {
-        _isSelected_erase_collision = true;
+        IsSelected_brush_flag       = false;
+        IsSelected_brush_tile       = false;
+        IsSelected_brush_monster    = false;
+        IsSelected_brush_collision  = false;
 
-        //_isSelected_erase_location  = false;
-       // _isSelected_brush_location  = false;
-        _isSelected_erase_inst      = false;
-        _isSelected_paint           = false;
-        _isSelected_brush_inst      = false;
-        _isSelected_brush_collision = false;
-        _isSelected_brush_trigger   = false;
-        _isSelected_erase_trigger   = false;
-        _isSelected_brush_hill = false;
-        _isSelected_erase_hill = false;
+        IsSelected_erase_flag       = false;
+        IsSelected_erase_tile       = false;
+        IsSelected_erase_collision  = true;
+        IsSelected_erase_monster    = false;
     }
-    public void SelectEraseTriggerLayer()
+    public void SelectEraseFlag()
     {
-        _isSelected_erase_trigger = true;
+        IsSelected_brush_flag       = false;
+        IsSelected_brush_tile       = false;
+        IsSelected_brush_monster    = false;
+        IsSelected_brush_collision  = false;
 
-        //_isSelected_erase_location  = false;
-       // _isSelected_brush_location  = false;
-        _isSelected_erase_inst      = false;
-        _isSelected_paint           = false;
-        _isSelected_brush_inst      = false;
-        _isSelected_brush_collision = false;
-        _isSelected_brush_trigger   = false;
-        _isSelected_erase_collision = false;
-        _isSelected_brush_hill = false;
-        _isSelected_erase_hill = false;
+        IsSelected_erase_flag       = true;
+        IsSelected_erase_tile       = false;
+        IsSelected_erase_collision  = false;
+        IsSelected_erase_monster    = false;
     }
-    public void SelectEraseHillLayer()
+    public void SelectEraseMonster()
     {
-        _isSelected_erase_hill = true;
+        IsSelected_brush_flag = false;
+        IsSelected_brush_tile = false;
+        IsSelected_brush_monster = false;
+        IsSelected_brush_collision = false;
 
-        _isSelected_brush_hill = false;
-        _isSelected_brush_inst = false;
-        _isSelected_erase_inst = false;
-        _isSelected_paint = false;
-       // _isSelected_brush_location = false;
-       //_isSelected_erase_location = false;
-        _isSelected_brush_collision = false;
-        _isSelected_brush_trigger = false;
-        _isSelected_erase_collision = false;
-        _isSelected_erase_trigger = false;
+        IsSelected_erase_flag = false;
+        IsSelected_erase_tile = false;
+        IsSelected_erase_collision = false;
+        IsSelected_erase_monster = true;
     }
+    #endregion
 
-    // PAINT
-    public void SelectPaint()
-    {
-        _isSelected_paint = true;
-        _isSelected_brush_inst = false;
-        _isSelected_erase_inst = false; 
-       // _isSelected_brush_location = false;
-       // _isSelected_erase_location = false;
-        _isSelected_brush_collision = false;
-        _isSelected_brush_trigger = false;
-        _isSelected_erase_collision = false;
-        _isSelected_erase_trigger = false;
-        _isSelected_brush_hill = false;
-        _isSelected_erase_hill = false;
-    }
-
+    #region DRAW BRUSH
     public void ProcessBrushing(Vector3Int cellpos, int floor)
     {
         Tilemap cash = _tilemapFloor[floor];
@@ -775,7 +460,7 @@ public class EELOMapEditorCore : MonoBehaviour
             Debug.LogError("_tilemapInstance 없음");
             return;
         }
-        if (_cashBrushedSO == null)
+        if (_cashBrushTile == null)
         {
             Debug.LogError("_cashInstBrushedTile 없음");
             return;
@@ -787,25 +472,29 @@ public class EELOMapEditorCore : MonoBehaviour
             {
                 try
                 {
-                    cash.SetTile(cellpos + new Vector3Int(i, j, 0), _cashBrushedSO._tile);
-                    worldMap[cellpos.x + i][cellpos.y + j].SetInstanceGUID(floor, _cashBrushedSO._guidTOBJ);
+                    cash.SetTile(cellpos + new Vector3Int(i, j, 0), _cashBrushTile._tile);
+                    worldMap[cellpos.x + i][cellpos.y + j].TileGUIDMemo[floor] = (ushort)_cashBrushTile.guid;//._guidTOBJ;
+
+                    //Undo.RegisterCreatedObjectUndo(_cashBrushTile._tile, "Create Tile");
+
+                    //_tilemapEvent.SetTile(cellpos + new Vector3Int(i, j, 0), _cashGatherEventTile);
 
                     //개체 이벤트일 경우 트리거이벤트도 추가
-                    if (_cashBrushedSO._isGatherEvent)
-                    {
-                        worldMap[cellpos.x + i][cellpos.y + j].SetEventEventIdx(_cashBrushedSO._gatherEventIdx);
-                        _tilemapEvent.SetTile(cellpos + new Vector3Int(i, j, 0), _cashGatherEventTile);
-                    }
-                    else
-                    {
-                        worldMap[cellpos.x + i][cellpos.y + j].SetEventEventIdx(-1);
-                        _tilemapEvent.SetTile(cellpos + new Vector3Int(i, j, 0), null);
-                    }
+                    //if (_cashBrushedSO._isGatherEvent)
+                    //{
+                    //    worldMap[cellpos.x + i][cellpos.y + j].SetEventIdx(_cashBrushedSO._gatherEventIdx);
+                    //    _tilemapEvent.SetTile(cellpos + new Vector3Int(i, j, 0), _cashGatherEventTile);
+                    //}
+                    //else
+                    //{
+                    //worldMap[cellpos.x + i][cellpos.y + j].SetEventIdx(-1);
+                    //_tilemapEvent.SetTile(cellpos + new Vector3Int(i, j, 0), null);
+                    //}
                     //지역일경우 지역 정보 저장
-                    if (_cashBrushedSO._isLocation)
-                    {
-                        worldMap[cellpos.x + i][cellpos.y + j].SetLocationType(_cashBrushedSO._locationType);
-                    }
+                    //if (_cashBrushedSO._isLocation)
+                    //{
+                    //    worldMap[cellpos.x + i][cellpos.y + j].SetLocationMemo(_cashBrushedSO._locationType);
+                    //}
                 }
                 catch
                 {
@@ -816,12 +505,9 @@ public class EELOMapEditorCore : MonoBehaviour
     }
     public void ProcessBrushing(Vector3Int cellpos, ETileLayerSaveType layerType)
     {
-        Tilemap cash;
-
         if (layerType == ETileLayerSaveType.Collision)
         {
-            cash = _tilemapCollision;
-            if (cash == null)
+            if (_tilemapCollision == null)
             {
                 Debug.LogError("_tilemapCollision 없음");
                 return;
@@ -838,8 +524,8 @@ public class EELOMapEditorCore : MonoBehaviour
                 {
                     try
                     {
-                        cash.SetTile(cellpos + new Vector3Int(i, j, 0), _cashCollisionTile);
-                        worldMap[cellpos.x + i][cellpos.y + j].SetIsCollision(true);
+                        _tilemapCollision.SetTile(cellpos + new Vector3Int(i, j, 0), _cashCollisionTile);
+                        worldMap[cellpos.x + i][cellpos.y + j].IsCollisionMemo = 1;
                     }
                     catch (Exception ex)
                     {
@@ -848,35 +534,34 @@ public class EELOMapEditorCore : MonoBehaviour
                 }
             }
         }
-        else if (layerType == ETileLayerSaveType.Event)
+        else if (layerType == ETileLayerSaveType.Flag)
         {
-            cash = _tilemapEvent;
-            if(cash == null)
+            if(_tilemapFlag == null || _cashFlagTile == null)
             {
-                Debug.LogError("_tilemapTrigger 없음");
+                Debug.LogError("에러");
                 return;
             }
-            if (cashWorldEventTriggerIdx == -1)
+
+            if (CashFlagIdx == -1)
             {
                 Debug.LogError("cashTriggerIdx 지정안됨");
                 return;
             }
-            if (_cashCommonEventTile == null)
-            {
-                Debug.LogError("_triggerTileSet 없음");
-                return;
-            }
             for (int i = 0; i < brushSize; i++)
             {
                 for (int j = 0; j < brushSize; j++)
                 {
                     try
                     {
-                        if (worldMap[cellpos.x + i][cellpos.y + j].GetEventTriggerIDX() > 999)
-                            return;
+                        //int flagNumber = worldMap[cellpos.x + i][cellpos.y + j].FlagIdxMemo;
+                        //if (flagNumber == -1)
+                        //    return;
+                        _tilemapFlag.SetTile(cellpos + new Vector3Int(i, j, 0), null);
 
-                        cash.SetTile(cellpos + new Vector3Int(i, j, 0), _cashCommonEventTile);
-                        worldMap[cellpos.x + i][cellpos.y + j].SetEventEventIdx(cashWorldEventTriggerIdx);
+                        Tile cashTile = _cashFlagTile as Tile;
+                        cashTile.color = Preset.FlagColors[CashFlagIdx];
+                        _tilemapFlag.SetTile(cellpos + new Vector3Int(i, j, 0), cashTile);
+                        worldMap[cellpos.x + i][cellpos.y + j].FlagIdxMemo = (ushort)CashFlagIdx;
                     }
                     catch (Exception ex)
                     {
@@ -885,28 +570,28 @@ public class EELOMapEditorCore : MonoBehaviour
                 }
             }
         }
-        else if (layerType == ETileLayerSaveType.Hill)
-        {
-            cash = _tilemapHill;
-            if (cash == null)
-            {
-                Debug.LogError("_tilemapHill 없음");
-                return;
-            }
-            if (_cashTileHill == null)
-            {
-                Debug.LogError("_cashTileHill 없음");
-                return;
-            }
 
+        else if (layerType == ETileLayerSaveType.Monster)
+        {
+            if (CashMonster == null)
+            {
+                Debug.LogError("몬스터선택요함");
+                return;
+            }
             for (int i = 0; i < brushSize; i++)
             {
                 for (int j = 0; j < brushSize; j++)
                 {
                     try
                     {
-                        cash.SetTile(cellpos + new Vector3Int(i, j, 0), _cashTileHill);
-                        worldMap[cellpos.x + i][cellpos.y + j].SetIsHill(true);
+                        //int flagNumber = worldMap[cellpos.x + i][cellpos.y + j].FlagIdxMemo;
+                        //if (flagNumber == -1)
+                        //    return;
+                        _tilemapMonster.SetTile(cellpos + new Vector3Int(i, j, 0), null);
+                        _tilemapMonster.SetTile(cellpos + new Vector3Int(i, j, 0), _cashMonsterTile);
+                        worldMap[cellpos.x + i][cellpos.y + j].MonsterGUIDMemo = (ushort)CashMonster.guid;
+
+                        CashMonsterList.Add(new Vector2Int(cellpos.x + i, cellpos.y + j));
                     }
                     catch (Exception ex)
                     {
@@ -916,84 +601,54 @@ public class EELOMapEditorCore : MonoBehaviour
             }
         }
     }
-
     public void ProcessErasing(Vector3Int cellpos, int floor)
     {
-        try
+        for (int i = 0; i < brushSize; i++)
         {
-            for (int i = 0; i < brushSize; i++)
+            for (int j = 0; j < brushSize; j++)
             {
-                for (int j = 0; j < brushSize; j++)
-                {
-                    Tilemap cash = _tilemapFloor[floor];
-
-                    //이벤트 트리거 타일까지 삭제                    
-                    if (worldMap[cellpos.x + i][cellpos.y + j].GetEventTriggerIDX() != -1)
-                    {
-                    }
-
-                    _tilemapEvent.SetTile(cellpos + new Vector3Int(i, j, 0), null);
-                    worldMap[cellpos.x + i][cellpos.y + j].SetEventEventIdx(-1);
-                    cash.SetTile(cellpos + new Vector3Int(i, j, 0), null);
-                    worldMap[cellpos.x + i][cellpos.y + j].SetInstanceGUID(floor, -1);
-                    worldMap[cellpos.x + i][cellpos.y + j].SetLocationType(ELocationTypeData.max);
-                }
+                Tilemap cash = _tilemapFloor[floor];
+                _tilemapFlag.SetTile(cellpos + new Vector3Int(i, j, 0), null);
+                worldMap[cellpos.x + i][cellpos.y + j].FlagIdxMemo = 0;
+                cash.SetTile(cellpos + new Vector3Int(i, j, 0), null);
+                worldMap[cellpos.x + i][cellpos.y + j].TileGUIDMemo[floor] = 0;
+                //worldMap[cellpos.x + i][cellpos.y + j].SetLocationMemo(ELocationTypeData.max);
             }
         }
-        catch
-        {
-
-        }
     }
-
     public void ProcessErasing(Vector3Int cellpos, ETileLayerSaveType layerType)
     {
-        Tilemap cash;
-        if (layerType == ETileLayerSaveType.Collision)
-            cash = _tilemapCollision;
-        else if (layerType == ETileLayerSaveType.Event)
-            cash = _tilemapEvent;
-        else if (layerType == ETileLayerSaveType.Hill)
-            cash = _tilemapHill;
-        else
-            return;
-
-        try
+        for (int i = 0; i < brushSize; i++)
         {
-            for (int i = 0; i < brushSize; i++)
+            for (int j = 0; j < brushSize; j++)
             {
-                for (int j = 0; j < brushSize; j++)
+                if (layerType == ETileLayerSaveType.Collision)
                 {
-                    if (layerType == ETileLayerSaveType.Collision)
-                    {
-                        cash.SetTile(cellpos + new Vector3Int(i, j, 0), null);
-                        worldMap[cellpos.x + i][cellpos.y + j].SetIsCollision(false);
-                    }
-                    else if (layerType == ETileLayerSaveType.Event)
-                    {
-                        if (worldMap[cellpos.x + i][cellpos.y + j].GetEventTriggerIDX() > 999)
-                            return;
-                        cash.SetTile(cellpos + new Vector3Int(i, j, 0), null);
-                        worldMap[cellpos.x + i][cellpos.y + j].SetEventEventIdx(-1);
-                    }
-                    else if (layerType == ETileLayerSaveType.Hill)
-                    {
-                        cash.SetTile(cellpos + new Vector3Int(i, j, 0), null);
-                        worldMap[cellpos.x + i][cellpos.y + j].SetIsHill(false);
-                    }
-                    else
-                    {
+                    _tilemapCollision.SetTile(cellpos + new Vector3Int(i, j, 0), null);
+                    worldMap[cellpos.x + i][cellpos.y + j].IsCollisionMemo = 0;
+                }
+                else if (layerType == ETileLayerSaveType.Flag)
+                {
+                    if (worldMap[cellpos.x + i][cellpos.y + j].FlagIdxMemo > 999)
                         return;
-                    }
+                    _tilemapFlag.SetTile(cellpos + new Vector3Int(i, j, 0), null);
+                    worldMap[cellpos.x + i][cellpos.y + j].FlagIdxMemo = 0;
+                }
+                else if (layerType == ETileLayerSaveType.Monster)
+                {
+                    _tilemapMonster.SetTile(cellpos + new Vector3Int(i, j, 0), null);
+                    worldMap[cellpos.x + i][cellpos.y + j].MonsterGUIDMemo = 0;
+
+
+                    CashMonsterList.Remove(new Vector2Int(cellpos.x + i, cellpos.y + j));
+                }
+                else
+                {
+                    return;
                 }
             }
         }
-        catch
-        {
-
-        }
     }
-
     public void ProcessBrushingDBG(Vector3Int cellpos)
     {
         if (_cashDBGSelectTile)
@@ -1007,316 +662,267 @@ public class EELOMapEditorCore : MonoBehaviour
             Debug.LogError("brushTile_debug 없다");
         }
     }
+    #endregion
 
-    public void ProcessPainting(Vector3Int cellpos)
-    {
-        //PaintBFS(cellpos, baseT);
-    }
-
-    public void RenderDebugMode()
-    {
-
-    }
+    #region RENDER ONOFF
     public void RenderCollision(bool flag)
     {
         _tilemapCollision.GetComponent<TilemapRenderer>().enabled = flag;
     }
     public void RenderTrigger(bool flag)
     {
-        _tilemapEvent.GetComponent<TilemapRenderer>().enabled = flag;
-    }
-    public void RenderHill(bool flag)
-    {
-        _tilemapHill.GetComponent<TilemapRenderer>().enabled = flag;
+        _tilemapFlag.GetComponent<TilemapRenderer>().enabled = flag;
     }
     public void RenderFloor(int floor, bool flag)
     {
         _tilemapFloor[floor].GetComponent<TilemapRenderer>().enabled = flag;
     }
-    /// <summary>
-    /// 데이터 저장 관련
-    /// </summary>
-    public void LoadAllPresetFromAssetDatabase()
-    {
-        TablePresetTile.Clear();
-        //TableLocTile.Clear();
-        string[] sAssetGuids    = AssetDatabase.FindAssets("t:DBPresetTileSO", new string[] { "Assets/Resources/PresetSO" });
-        string[] sAssetPathList = Array.ConvertAll<string, string>(sAssetGuids, AssetDatabase.GUIDToAssetPath); //★
-        foreach (string fullpath in sAssetPathList)
-        {
-            DBPresetTileSO pAssetObject = AssetDatabase.LoadAssetAtPath(fullpath, typeof(DBPresetTileSO)) as DBPresetTileSO;
+    #endregion
 
-            //if(pAssetObject._isBaseLocPlane)
-            //{
-            //    if (!TableLocTile.ContainsKey(pAssetObject._locationType))
-            //        TableLocTile.Add(pAssetObject._locationType, pAssetObject);
-            //    else
-            //        Debug.LogError("지역타일 중복 SO");
-            //}
-            //else
+    public bool NEWSaveSerializeMapdata(string filename)
+    {
+        UKH2.SerializableTileDataStr saveTiles = new UKH2.SerializableTileDataStr();
+        int sizeX = worldMap.Count;
+        int sizeY = worldMap[0].Count;
+        for (int i = 0; i < sizeX; i++)
+        {
+            string[] row = new string[sizeY];
+            for (int j = 0; j < sizeY; j++)
             {
-                if (!TablePresetTile.ContainsKey(pAssetObject._guidTOBJ))
-                    TablePresetTile.Add(pAssetObject._guidTOBJ, pAssetObject);
-                else
-                    Debug.LogError("인스턴스타일 guid중복 SO");
-               
+                row[j] = $"{worldMap[i][j].TileGUIDMemo[0].ToString()}#{worldMap[i][j].TileGUIDMemo[1].ToString()}#{worldMap[i][j].TileGUIDMemo[2].ToString()}#";
+                row[j] += worldMap[i][j].IsCollisionMemo.ToString();
+                row[j] += "#";
+                row[j] += worldMap[i][j].FlagIdxMemo.ToString();
+                row[j] += "#";
+                row[j] += worldMap[i][j].MonsterGUIDMemo.ToString();
+            }
+            saveTiles.gridData.Add(row);
+        }
+
+        if (Directory.Exists($"{pathSave}/{filename}") == false)
+            Directory.CreateDirectory($"{pathSave}/{filename}");
+
+        string path = $"{pathSave}/{filename}/{filename}.worldmap";
+        UKH2.Serializator.Serialize(path, saveTiles); // trying to serialise
+        //List<List<UKH.SerializableTileData>> a = UKH.Serializator.Deserialize<List<List<UKH.SerializableTileData>>>(path);
+        return UKH.FileSystem.FileExistChecker(path);
+    }
+    public bool NEWOverwriteCheckMapdata(string filename)
+    {
+        return UKH.FileSystem.FileExistChecker($"{pathSave}/{filename}/{filename}.worldmap");
+    }
+    public bool NEWSaveSerializePreset(string filename)
+    {
+        string pathTile     = $"{pathSave}/{filename}/presetTile.pset";
+        string pathMonster  = $"{pathSave}/{filename}/presetMonster.pset";
+        if (Directory.Exists($"{pathSave}/{filename}") == false)
+            Directory.CreateDirectory($"{pathSave}/{filename}");
+
+        List<SerializePresetDataTile> psetListTile = new List<SerializePresetDataTile>();
+        foreach(var pset in Preset.tiles)
+        {
+            SerializePresetDataTile newPreset = new SerializePresetDataTile();
+            newPreset._filename        = pset._filename;
+            newPreset._guid            = pset.guid;
+            newPreset._isUseAnim       = pset._isUseAnim;
+            newPreset._texturename     = pset._texture.name;
+            for(int i = 0;i < pset._animTextureList.Count;i++)
+                newPreset._animTexturenameList.Add(pset._animTextureList[i].name);            
+            newPreset._tilename        = pset._tile == null ? "" : pset._tile.name;
+            newPreset._pivotAlignment  = pset._pivotAlignment;
+            newPreset._isShaderAnim    = pset._isShaderAnim;
+            newPreset._shaderAnimIdx   = pset._shaderAnimIdx;
+
+            psetListTile.Add(newPreset);
+        }
+        UKH2.Serializator.Serialize(pathTile, psetListTile); // trying to serialise
+        //List<SerializePresetDataTile> a = UKH.Serializator.Deserialize<List<SerializePresetDataTile>>(pathTile);
+
+
+        UKH2.Serializator.Serialize(pathMonster, Preset.monsters);
+        //List<SerializePresetDataMonster> b = UKH2.Serializator.Deserialize<List<SerializePresetDataMonster>>(pathMonster);
+
+        return UKH.FileSystem.FileExistChecker(pathTile) && UKH.FileSystem.FileExistChecker(pathMonster);
+    }
+    public void NewDrawingTileMapData(List<string[]> mapTileData)
+    {
+        if (mapTileData != null)
+        {
+            int sizeX = mapTileData.Count;
+            int sizeY = mapTileData[0].Length;
+
+            //브러쉬 에이전트 
+            if (sizeX > 0 && sizeY > 0)
+            {
+                for (int i = 0; i < sizeX; i++)
+                {
+                    for (int j = 0; j < sizeY; j++)
+                    {
+                        Vector3 pos = new Vector3(
+                                (i * 0.5f) - (j * 0.5f),
+                                (i * 0.25f) + (j * 0.25f),
+                                0f);
+                        try
+                        {
+                            string[] tokens = mapTileData[i][j].Split("#");
+                            int[] isFloorGUID = new int[3];
+                            isFloorGUID[0] = Int32.Parse(tokens[0]);
+                            isFloorGUID[1] = Int32.Parse(tokens[1]);
+                            isFloorGUID[2] = Int32.Parse(tokens[2]);
+
+                            for (int floor = 0; floor < isFloorGUID.Length; floor++)
+                            {
+                                if (Preset.FindTile(isFloorGUID[floor]) != null)
+                                {
+                                    Vector3Int cellpos = _tilemapFloor[floor].WorldToCell(pos);
+                                    _tilemapFloor[floor].SetTile(cellpos, Preset.FindTile(isFloorGUID[floor])._tile);
+
+                                    worldMap[i][j].TileGUIDMemo[floor] = (ushort)(isFloorGUID[floor] < 0 ? 0 : isFloorGUID[floor]);
+                                }
+                            }
+
+                            worldMap[i][j].IsCollisionMemo = UInt16.Parse(tokens[3]);
+                            if (worldMap[i][j].IsCollisionMemo == 1)
+                            {
+                                Vector3Int cellpos = _tilemapCollision.WorldToCell(pos);
+                                _tilemapCollision.SetTile(cellpos, _cashCollisionTile);
+                            }
+
+                            worldMap[i][j].FlagIdxMemo = UInt16.Parse(tokens[4]);
+                            if (worldMap[i][j].FlagIdxMemo != 0)
+                            {
+                                Vector3Int cellpos = _tilemapCollision.WorldToCell(pos);
+                                Tile cashTile = _cashFlagTile as Tile;
+                                cashTile.color = Preset.FlagColors[worldMap[i][j].FlagIdxMemo];
+                                _tilemapFlag.SetTile(cellpos, cashTile);
+                            }
+
+                            worldMap[i][j].MonsterGUIDMemo = UInt16.Parse(tokens[5]);
+                            if (worldMap[i][j].MonsterGUIDMemo != 0)
+                            {
+                                Vector3Int cellpos = _tilemapCollision.WorldToCell(pos);
+                                _tilemapMonster.SetTile(cellpos, _cashMonsterTile);
+                                CashMonsterList.Add(new Vector2Int(cellpos.x, cellpos.y));
+                            }
+                        }
+                        catch
+                        {
+                            Debug.LogError($"{i},{j} 예외발생");
+                        }
+                    }
+                }
             }
         }
     }
-    public void PushPresetSOTable(DBPresetTileSO data)
-    {
-        //if(data._isBaseLocPlane)
-        //{
-        //    if (TableLocTile.ContainsKey(data._locationType))
-        //    {
-        //        TableLocTile[data._locationType] = data;
-        //        Debug.LogError("덮어쓰기완료");
-        //    }
-        //    else
-        //    {
-        //        TableLocTile.Add(data._locationType, data);
-        //    }
-        //}
-        //else
-        {
-            if (TablePresetTile.ContainsKey(data._guidTOBJ))
-            {
-                TablePresetTile[data._guidTOBJ] = data;
-                Debug.LogError("덮어쓰기완료");
-            }
-            else
-            {
-                TablePresetTile.Add(data._guidTOBJ, data);
-            }
-        }
-       
-    }
 
-    public DBPresetTileSO GetPresetSOFromAssetDatabase(string filename)
+    [Obsolete]
+    public bool FileOverwriteCheck(string filename)
     {
-        return Resources.Load<DBPresetTileSO>($"PresetSO/{filename}");
+        return UKH.FileSystem.FileExistChecker($"{pathSave}/{filename}.mins");
     }
-    public List<DBPresetTileSO> GetaAllInstSO()
-    {
-        return new List<DBPresetTileSO>(TablePresetTile.Values);
-    }
-    //public List<DBPresetTileSO> GetaAllLocSO()
-    //{
-    //    return new List<DBPresetTileSO>(TableLocTile.Values);
-    //}
-    public void DelInstSO(int guid)
-    {
-        if(TablePresetTile.ContainsKey(guid))
-        {
-            string pathToDelete = AssetDatabase.GetAssetPath(TablePresetTile[guid]);
-            AssetDatabase.DeleteAsset(pathToDelete);
-
-            pathToDelete = AssetDatabase.GetAssetPath(TablePresetTile[guid]._tile);
-            AssetDatabase.DeleteAsset(pathToDelete);
-
-            TablePresetTile.Remove(guid);
-        }
-    }
-    //public void DelLocSO(ELocationTypeData loc)
-    //{
-    //    if (TableLocTile.ContainsKey(loc))
-    //    {
-    //        string pathToDelete = AssetDatabase.GetAssetPath(TableLocTile[loc]);
-    //        AssetDatabase.DeleteAsset(pathToDelete);
-    //
-    //        pathToDelete = AssetDatabase.GetAssetPath(TableLocTile[loc]._tile);
-    //        AssetDatabase.DeleteAsset(pathToDelete);
-    //
-    //        TableLocTile.Remove(loc);
-    //    }
-    //}
-
-    public bool FileExistCheck(string filename)
-    {
-        return UKH.FileSystem.FileExistChecker($"{mapDatafilePath}/{filename}.mins");
-    }
-    // Export & Import
-    public bool ExportMapData(string filename, ETileLayerSaveType layerType)
-    {
-        string exetension = "";
-        if (layerType == ETileLayerSaveType.Floor)
-            exetension = "mins";
-        else if (layerType == ETileLayerSaveType.Location)
-            exetension = "mloc";
-        else if (layerType == ETileLayerSaveType.Collision)
-            exetension = "mcol";
-        else if (layerType == ETileLayerSaveType.Event)
-            exetension = "mtri";
-        else if (layerType == ETileLayerSaveType.Hill)
-            exetension = "mhill";
-
-        return UKH.FileSystem.BinaryWrite(worldMap, $"{mapDatafilePath}/{filename}.{exetension}", layerType);
-    }
-
-    public bool SavePresetToJson()
-    {
-        int result = 0;
-        if (TablePresetTile != null)
-        {
-            foreach (var item in TablePresetTile.Values)
-            {
-                if (UKH.JsonETileEncryptIO.SavePresetToJson(item, "ETPI_" + item._filename, false) == false)
-                    result++;
-            }
-        }
-        //if (TableLocTile != null)
-        //{
-        //    foreach (var item in TableLocTile.Values)
-        //    {
-        //        if (UKHMapUtility.JsonETileEncryptIO.SavePresetToJson(item, "ETPL_" + item._filename, true) == false)
-        //            result++;
-        //    }
-        //}
-        return result == 0;
-    }
-    //public void LoadETPreset()
-    //{
-    //    List<DBPresetTileOBJ> loadOBJLoc  = UKHMapUtility.JsonETileEncryptIO.Load(true);
-    //    List<DBPresetTileOBJ> loadOBJInst = UKHMapUtility.JsonETileEncryptIO.Load(false);
-    //}
-    //
+    [Obsolete]
     public UKH.SerializableGridData GetLoadWorldData(string filename)
     {
-        return UKH.FileSystem.BinaryRead($"{mapDatafilePath}/{filename}.mins");
+        return UKH.FileSystem.BinaryRead($"{pathSave}/{filename}.mins");
     }
-    public void ImportMapData(string filename, ETileLayerSaveType layerType)
+    [Obsolete]
+    public void DrawingTileMapData(string filename)
+    {        
+        UKH.SerializableGridData binaryData = UKH.FileSystem.BinaryRead($"{pathSave}/{filename}.mins");//, layerType);
+        if (binaryData.gridData != null)
+        {
+            int sizeX = binaryData.gridData.Count;
+            int sizeY = binaryData.gridData[0].Length;
+
+            //브러쉬 에이전트 
+            if (sizeX > 0 && sizeY > 0)
+            {
+                for (int i = 0; i < sizeX; i++)
+                {
+                    for (int j = 0; j < sizeY; j++)
+                    {
+                        Vector3 pos = new Vector3(
+                                (i * 0.5f) - (j * 0.5f),
+                                (i * 0.25f) + (j * 0.25f),
+                                0f);
+                        try
+                        {
+                            string[] guids = binaryData.gridData[i][j].Split("#");
+                            int[] isFloorGUID = new int[3];
+                            isFloorGUID[0] = Int32.Parse(guids[0]);
+                            isFloorGUID[1] = Int32.Parse(guids[1]);
+                            isFloorGUID[2] = Int32.Parse(guids[2]);
+
+                            for (int floor = 0; floor < isFloorGUID.Length; floor++)
+                            {
+                                if (Preset.FindTile(isFloorGUID[floor]) != null)
+                                {
+                                    Vector3Int cellpos = _tilemapFloor[floor].WorldToCell(pos);
+                                    _tilemapFloor[floor].SetTile(cellpos, Preset.FindTile(isFloorGUID[floor])._tile);
+
+                                    worldMap[i][j].TileGUIDMemo[floor] = (ushort)(isFloorGUID[floor] < 0 ? 0 : isFloorGUID[floor]);
+                                }
+                            }
+                        }
+                        catch
+                        {
+                            //Debug.LogError($"{i},{j} 예외발생");
+                        }
+                    }
+                }
+            }
+        }
+
+    }
+    [Obsolete]
+    public void DrawingCollisionData(string filename)
     {
-        string exetension = "";
-        if (layerType == ETileLayerSaveType.Floor)
-            exetension = "mins";
-        else if (layerType == ETileLayerSaveType.Location)
-            exetension = "mloc";
-        else if (layerType == ETileLayerSaveType.Collision)
-            exetension = "mcol";
-        else if (layerType == ETileLayerSaveType.Event)
-            exetension = "mtri";
-        else if (layerType == ETileLayerSaveType.Hill)
-            exetension = "mhill";
+        UKH.SerializableGridData binaryData = UKH.FileSystem.BinaryRead($"{pathSave}/{filename}.mcol");//, layerType);
+        if (binaryData.gridData != null)
+        {
+            int sizeX = binaryData.gridData.Count;
+            int sizeY = binaryData.gridData[0].Length;
 
-        LoadBrushedWorldMap(UKH.FileSystem.BinaryRead($"{mapDatafilePath}/{filename}.{exetension}"), layerType);
+            //브러쉬 에이전트 
+            if (sizeX > 0 && sizeY > 0)
+            {
+                for (int i = 0; i < sizeX; i++)
+                {
+                    for (int j = 0; j < sizeY; j++)
+                    {
+                        Vector3 pos = new Vector3(
+                                (i * 0.5f) - (j * 0.5f),
+                                (i * 0.25f) + (j * 0.25f),
+                                0f);
+                        try
+                        {
+                            string isCollision = binaryData.gridData[i][j];
+                            worldMap[i][j].IsCollisionMemo = (ushort)(isCollision == "T" ? 1 : 0);
 
-        // for (int i = 0; i < worldMap.Count; i++)
-        // {
-        //     string row = "";
-        //     for (int j = 0; j < worldMap[i].Count; j++)
-        //     {
-        //         if(layerType == ETileLayerType.Instance)
-        //             row += worldMap[i][j].GetInstanceGUID().ToString() + ",";
-        //         if (layerType == ETileLayerType.Location)
-        //             row += worldMap[i][j].GetLocationType().ToString() + ",";
-        //         if (layerType == ETileLayerType.Collision)
-        //             row += worldMap[i][j].GetIsCollision().ToString() + ",";
-        //         if (layerType == ETileLayerType.Trigger)
-        //             row += worldMap[i][j].GetTriggerIDX().ToString() + ",";
-        //     }
-        //     Debug.Log(row);
-        // }
+                            //그리기
+                            if (worldMap[i][j].IsCollisionMemo == 1)
+                            {
+                                Vector3Int cellpos = _tilemapCollision.WorldToCell(pos);
+                                _tilemapCollision.SetTile(cellpos, _cashCollisionTile);
+                            }
+                        }
+                        catch
+                        {
+                            //Debug.LogError($"{i},{j} 예외발생");
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 public enum ETileLayerSaveType
 {
     Floor,
-    Location,
     Collision,
-    Event,
-    Hill
+    Flag,
+    Monster
 }
 
 #endif
-
-//Debug.Log("--------------------------------------");
-//for (int i = 0; i < worldMap.Count; i++)
-//{
-//    string row = "";
-//    for (int j = 0; j < worldMap[i].Count; j++)
-//    {
-//        if (layerType == ETileLayerType.Instance)
-//            row += worldMap[i][j].GetInstanceGUID().ToString() + ",";
-//        if (layerType == ETileLayerType.Location)
-//            row += worldMap[i][j].GetLocationType().ToString() + ",";
-//        if (layerType == ETileLayerType.Collision)
-//            row += worldMap[i][j].GetIsCollision().ToString() + ",";
-//        if (layerType == ETileLayerType.Trigger)
-//            row += worldMap[i][j].GetTriggerIDX().ToString() + ",";
-//    }
-//    Debug.Log(row);
-//}
-
-//페인트 통 부으면 경계선 까지 채우는 알고리즘
-//private void PaintBFS(Vector3Int cellpos, TileBase tile)
-//{
-//    List<OCell> resultTile = new List<OCell>();
-
-//    //현제셀 정보
-//    OCell startCell     = worldMap[cellpos.x, cellpos.y];
-//    int currentTileID   = startCell.FCell.Data.ObjID;
-
-//    //큐
-//    Queue<OCell> queue  = new Queue<OCell>();
-//    queue.Enqueue(worldMap[cellpos.x, cellpos.y]);
-
-//    while (queue.Count > 0)
-//    {
-//        OCell current = queue.Peek();
-//        current.IsVisitedBFS = true;
-
-//        // ///////////////////////////////////////////////
-//        OCell next = worldMap[cellpos.x + 1, cellpos.y];
-//        if (next.FCell.Data.ObjID == currentTileID && next.IsVisitedBFS == false)
-//        {
-//            queue.Enqueue(next);
-//            resultTile.Add(next);
-//        }
-//        else
-//        {
-//            queue.Dequeue();
-//        }
-
-//        // ///////////////////////////////////////////////
-//        next = worldMap[cellpos.x - 1, cellpos.y];
-//        if (next.FCell.Data.ObjID == currentTileID && next.IsVisitedBFS == false)
-//        {
-//            queue.Enqueue(next);
-//            resultTile.Add(next);
-//        }
-//        else
-//        {
-//            queue.Dequeue();
-//        }
-
-//        // ///////////////////////////////////////////////
-//        next = worldMap[cellpos.x, cellpos.y + 1];
-//        if (next.FCell.Data.ObjID == currentTileID && next.IsVisitedBFS == false)
-//        {
-//            queue.Enqueue(next);
-//            resultTile.Add(next);
-//        }
-//        else
-//        {
-//            queue.Dequeue();
-//        }
-
-//        // ///////////////////////////////////////////////
-//        next = worldMap[cellpos.x + 1, cellpos.y - 1];
-//        if (next.FCell.Data.ObjID == currentTileID && next.IsVisitedBFS == false)
-//        {
-//            queue.Enqueue(next);
-//            resultTile.Add(next);
-//        }
-//        else
-//        {
-//            queue.Dequeue();
-//        }
-//    }
-
-//    for(int i = 0; i < resultTile.Count; i++)
-//    {
-//        //baseTilemap.SetTile(resultTile[i].FCell.GridPos, startCell.PTile);
-//    }
-//}

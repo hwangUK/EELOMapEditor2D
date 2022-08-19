@@ -6,67 +6,51 @@ using UnityEngine.Tilemaps;
 
 public class DBPresetTileSO : ScriptableObject
 {
-    //public FCellData        data;
     public int              _guidTOBJ;
-    public ELocationTypeData    _locationType;
     public string           _filename;
-    public bool             _isLocation;
     public bool             _isUseAnim;
     public Texture2D        _texture;
     public List<Texture2D>  _animTextureList;
     public Tile             _tile;
-    public bool             _isGatherEvent;
-    public int              _gatherEventIdx;
     public SpriteAlignment  _pivotAlignment;
+    public bool             _isShaderAnim;
+    public int              _shaderAnimIdx;
 
     public void NewSavePresetTileData(
-        int             guidTOBJ,
-        ELocationTypeData   locationType,
-        string          name,
-        bool            isBaseLocPlane,
-        bool            isUseAnim,
-        Texture2D       texture,
-        List<Texture2D> animTextureList,
-        Tile            tile,
-        bool            isGather,
-        int             gatherEvent,
-        SpriteAlignment alignment
+        int                 guidTOBJ,
+        string              name,
+        bool                isUseAnim,
+        Texture2D           texture,
+        List<Texture2D>     animTextureList,
+        Tile                tile,
+        SpriteAlignment     alignment,
+        bool                isShaderAnim,
+        int                 shaderAnimIdx
         )
     {
         _tile               = tile;
         _guidTOBJ           = guidTOBJ;
         _filename           = name;
-        _isLocation     = isBaseLocPlane;
-        _locationType       = locationType;
         _texture            = texture;
         _isUseAnim          = isUseAnim;
-        _texture            = texture;
         _animTextureList    = animTextureList;
-        _isGatherEvent      = isGather;
-        _gatherEventIdx     = gatherEvent;
-        _pivotAlignment          = alignment; 
+        _pivotAlignment     = alignment; 
+        _isShaderAnim       = isShaderAnim;
+        _shaderAnimIdx      = shaderAnimIdx;
     }
 
     public void ModSaveTileData(
-        ELocationTypeData locationType,
-        bool isBaseLocPlane,
         bool isUseAnim,
         List<Texture2D> animTextureList,
-        bool isGather,
-        int gatherIdx,
-         SpriteAlignment alignment
-      )
+        SpriteAlignment alignment,
+        bool isShaderAnim,
+        int shaderAnimIdx
+        )
     {
-        _isLocation             = isBaseLocPlane;
-        _locationType           = locationType;
         _isUseAnim              = isUseAnim;
         _animTextureList        = animTextureList;
-        _isGatherEvent          = isGather;
-        _gatherEventIdx         = gatherIdx;
-        _pivotAlignment         = alignment;
+        _pivotAlignment         = alignment; 
+        _isShaderAnim           = isShaderAnim;
+        _shaderAnimIdx          = shaderAnimIdx;
     }
-    //public void SetData(FCellData input_data)
-    //{
-    //    data = input_data;
-    //}
 }
